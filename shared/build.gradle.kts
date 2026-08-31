@@ -6,6 +6,8 @@ plugins {
     alias(libs.plugins.kotlinSerialization)
 }
 
+val openjfxVersion = "21.0.2"
+
 kotlin {
     androidTarget {
         compilations.all {
@@ -64,6 +66,11 @@ kotlin {
                 implementation(compose.desktop.currentOs)
                 implementation(libs.kotlinx.coroutines.swing)
                 implementation(libs.ktor.client.cio)
+                implementation("org.openjfx:javafx-media:$openjfxVersion:win")
+                implementation("org.openjfx:javafx-swing:$openjfxVersion:win")
+                implementation("org.openjfx:javafx-graphics:$openjfxVersion:win")
+                implementation("org.openjfx:javafx-controls:$openjfxVersion:win")
+                implementation("org.openjfx:javafx-base:$openjfxVersion:win")
             }
         }
     }

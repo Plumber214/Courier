@@ -27,7 +27,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Msi, TargetFormat.Exe)
             packageName = "Courier"
-            packageVersion = "1.1.0"
+            packageVersion = "1.2.0"
             description = "Minimal Video Downloader for YouTube, TikTok, Instagram, and Facebook"
             vendor = "Courier"
         }

@@ -3,6 +3,7 @@ package courier.viewmodel
 import courier.engine.DownloadEngine
 import courier.engine.UrlValidator
 import courier.manager.DownloadManager
+import courier.model.DownloadItem
 import courier.model.Platform
 import courier.model.VideoFormat
 import courier.model.VideoInfo
@@ -21,7 +22,8 @@ data class HomeUiState(
     val previewInfo: VideoInfo? = null,
     val showQualityPicker: Boolean = false,
     val detectedClipboardUrl: String? = null,
-    val showClipboardBanner: Boolean = false
+    val showClipboardBanner: Boolean = false,
+    val activePreviewItem: DownloadItem? = null
 )
 
 class HomeViewModel(
@@ -171,6 +173,18 @@ class HomeViewModel(
         _uiState.value = _uiState.value.copy(
             showQualityPicker = false,
             previewInfo = null
+        )
+    }
+
+    fun openMediaPreview(item: DownloadItem) {
+        _uiState.value = _uiState.value.copy(
+            activePreviewItem = item
+        )
+    }
+
+    fun dismissMediaPreview() {
+        _uiState.value = _uiState.value.copy(
+            activePreviewItem = null
         )
     }
 }

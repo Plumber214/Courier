@@ -11,7 +11,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -35,15 +34,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CleaningServices
-import androidx.compose.material.icons.filled.DownloadDone
-import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.PlayCircleOutline
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Stream
 import androidx.compose.material.icons.filled.VideoLibrary
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -58,7 +51,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -69,6 +61,7 @@ import courier.model.DownloadStatus
 import courier.model.Platform
 import courier.ui.components.ClipboardPrompt
 import courier.ui.components.DownloadItemCard
+import courier.ui.components.MediaPlayerModal
 import courier.ui.components.QualityPickerDialog
 import courier.ui.components.SetupWizardDialog
 import courier.ui.components.UrlInputBar
@@ -76,9 +69,7 @@ import courier.ui.theme.AccentCyan
 import courier.ui.theme.AccentPink
 import courier.ui.theme.CardBorderDark
 import courier.ui.theme.PrimaryIndigo
-import courier.ui.theme.SuccessGreen
 import courier.ui.theme.SurfaceCard
-import courier.ui.theme.SurfaceDark
 import courier.ui.theme.SurfaceVariantDark
 import courier.ui.theme.TextMuted
 import courier.ui.theme.TextPrimary
@@ -127,7 +118,7 @@ fun HomeScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 20.dp)
+                .padding(horizontal = 22.dp)
                 .padding(top = 18.dp, bottom = 14.dp)
         ) {
             // App Bar
@@ -210,9 +201,9 @@ fun HomeScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(18.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // URL Input Area (Refined 50dp height with frosted glass)
+            // URL Input Area
             UrlInputBar(
                 url = uiState.inputUrl,
                 onUrlChange = homeViewModel::onUrlChanged,
@@ -222,7 +213,7 @@ fun HomeScreen(
                 isAnalyzing = uiState.isAnalyzing
             )
 
-            // Prominent Link Analyzing Banner (Immediate user feedback)
+            // Prominent Link Analyzing Banner
             AnimatedVisibility(
                 visible = uiState.isAnalyzing,
                 enter = expandVertically(tween(250)) + fadeIn(tween(250)),
@@ -242,7 +233,7 @@ fun HomeScreen(
                 val targetPlatform = if (uiState.inputUrl.isNotBlank()) Platform.fromUrl(uiState.inputUrl) else Platform.OTHER
                 val brandColor = Color(targetPlatform.brandColorHex)
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -296,7 +287,7 @@ fun HomeScreen(
 
             // Clipboard Detection Prompt
             if (uiState.showClipboardBanner && !uiState.isAnalyzing) {
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(14.dp))
                 ClipboardPrompt(
                     detectedUrl = uiState.detectedClipboardUrl,
                     visible = uiState.showClipboardBanner,
@@ -307,13 +298,13 @@ fun HomeScreen(
 
             // Error message if any
             if (uiState.analysisError != null) {
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(AccentPink.copy(alpha = 0.15f), RoundedCornerShape(10.dp))
                         .border(1.dp, AccentPink.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-                        .padding(10.dp)
+                        .padding(12.dp)
                 ) {
                     Text(
                         text = uiState.analysisError ?: "",
@@ -324,7 +315,7 @@ fun HomeScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(22.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             // Downloads List Header
             Row(
@@ -354,9 +345,9 @@ fun HomeScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // Downloads Queue / List with smooth item removal animations
+            // Downloads Queue / List
             if (downloads.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -372,11 +363,11 @@ fun HomeScreen(
                             .fillMaxWidth()
                             .background(SurfaceCard, RoundedCornerShape(22.dp))
                             .border(1.dp, CardBorderDark, RoundedCornerShape(22.dp))
-                            .padding(28.dp)
+                            .padding(32.dp)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(72.dp)
+                                .size(76.dp)
                                 .background(PrimaryIndigo.copy(alpha = 0.2f), CircleShape)
                                 .border(1.dp, AccentCyan.copy(alpha = 0.4f), CircleShape),
                             contentAlignment = Alignment.Center
@@ -385,11 +376,11 @@ fun HomeScreen(
                                 imageVector = Icons.Default.PlayCircleOutline,
                                 contentDescription = null,
                                 tint = AccentCyan,
-                                modifier = Modifier.size(36.dp)
+                                modifier = Modifier.size(38.dp)
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(18.dp))
 
                         Text(
                             text = "Ready to Download",
@@ -408,7 +399,7 @@ fun HomeScreen(
                             lineHeight = 19.sp
                         )
 
-                        Spacer(modifier = Modifier.height(20.dp))
+                        Spacer(modifier = Modifier.height(22.dp))
 
                         // Platform pills
                         Row(
@@ -420,7 +411,7 @@ fun HomeScreen(
                                     modifier = Modifier
                                         .background(Color(p.brandColorHex).copy(alpha = 0.18f), RoundedCornerShape(8.dp))
                                         .border(1.dp, Color(p.brandColorHex).copy(alpha = 0.45f), RoundedCornerShape(8.dp))
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        .padding(horizontal = 10.dp, vertical = 5.dp)
                                 ) {
                                     Text(
                                         p.displayName,
@@ -438,7 +429,7 @@ fun HomeScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(bottom = 16.dp)
                 ) {
                     items(downloads, key = { it.id }) { item ->
@@ -461,13 +452,27 @@ fun HomeScreen(
                                         dismissingItemIds.remove(item.id)
                                     }
                                 },
-                                onOpenFile = { downloadManager.openDownloadedFile(item) },
+                                onOpenFile = { homeViewModel.openMediaPreview(item) },
                                 onOpenFolder = { downloadManager.openDownloadFolder(item) }
                             )
                         }
                     }
                 }
             }
+        }
+
+        // In-App Media Player Preview Modal
+        if (uiState.activePreviewItem != null) {
+            MediaPlayerModal(
+                item = uiState.activePreviewItem!!,
+                onDismiss = homeViewModel::dismissMediaPreview,
+                onOpenExternal = {
+                    uiState.activePreviewItem?.let { downloadManager.openDownloadedFile(it) }
+                },
+                onOpenFolder = {
+                    uiState.activePreviewItem?.let { downloadManager.openDownloadFolder(it) }
+                }
+            )
         }
 
         // Quality picker dialog with destination selection

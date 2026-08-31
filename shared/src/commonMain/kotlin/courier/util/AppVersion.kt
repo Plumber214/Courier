@@ -2,11 +2,11 @@ package courier.util
 
 object AppVersion {
     const val MAJOR = 1
-    const val MINOR = 1
+    const val MINOR = 2
     const val PATCH = 0
-    const val BUILD_NUMBER = 14
-    const val VERSION_NAME = "1.1.0"
-    const val RELEASE_DATE = "2026.08.30"
+    const val BUILD_NUMBER = 15
+    const val VERSION_NAME = "1.2.0"
+    const val RELEASE_DATE = "2026.08.31"
     const val GIT_BRANCH = "main"
 
     val DISPLAY_STRING: String

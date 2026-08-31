@@ -1,0 +1,31 @@
+# Gradle & Build artifacts
+.gradle/
+build/
+*/build/
+bin/
+out/
+
+# Local configuration & IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.DS_Store
+local.properties
+.kotlin/
+
+# Android build outputs
+*.apk
+*.ap_
+*.aab
+*.dex
+
+# Embedded engine binaries
+desktopApp/binaries/
+androidApp/src/main/jniLibs/
+
+# Logs & temporary files
+build/reports/
+build/test-results/
+*.log

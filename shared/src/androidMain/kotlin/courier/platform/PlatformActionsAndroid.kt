@@ -1,0 +1,124 @@
+package courier.platform
+
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.media.MediaScannerConnection
+import android.net.Uri
+import android.os.Environment
+import android.util.Log
+import androidx.core.content.FileProvider
+import java.io.File
+
+class PlatformActionsAndroid : PlatformActions {
+    private val context: Context
+        get() = AppContextHolder.appContext
+
+    override fun getClipboardText(): String? {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+        val clip = clipboard?.primaryClip ?: return null
+        if (clip.itemCount > 0) {
+            val item = clip.getItemAt(0)
+            return item.text?.toString() ?: item.uri?.toString()
+        }
+        return null
+    }
+
+    override fun setClipboardText(text: String) {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+        val clip = ClipData.newPlainText("Courier Link", text)
+        clipboard?.setPrimaryClip(clip)
+    }
+
+    override fun openFile(filePath: String): Boolean {
+        val file = File(filePath)
+        if (!file.exists()) return false
+
+        return try {
+            val uri: Uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            )
+
+            val mimeType = when (file.extension.lowercase()) {
+                "mp4", "mkv", "webm" -> "video/*"
+                "mp3", "m4a", "aac", "wav", "opus" -> "audio/*"
+                else -> "*/*"
+            }
+
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mimeType)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+
+            context.startActivity(intent)
+            true
+        } catch (e: Exception) {
+            Log.e("Courier", "Failed to open file: $filePath", e)
+            false
+        }
+    }
+
+    override fun openFolder(folderPath: String): Boolean {
+        return try {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(Uri.parse(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).path), "*/*")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            true
+        } catch (e: Exception) {
+            Log.e("Courier", "Failed to open folder: $folderPath", e)
+            false
+        }
+    }
+
+    override fun deleteFile(filePath: String): Boolean {
+        return try {
+            val file = File(filePath)
+            val deleted = if (file.exists()) file.delete() else true
+
+            // Trigger MediaScanner so the deleted media is removed from Gallery / Photos app
+            try {
+                MediaScannerConnection.scanFile(
+                    context,
+                    arrayOf(filePath),
+                    null,
+                    null
+                )
+            } catch (scanErr: Exception) {
+                Log.w("Courier", "MediaScanner deletion notification error", scanErr)
+            }
+
+            deleted
+        } catch (e: Exception) {
+            Log.e("Courier", "Failed to delete file: $filePath", e)
+            false
+        }
+    }
+
+    override fun chooseDirectory(): String? {
+        // Android downloads default to Downloads/Courier
+        return null
+    }
+
+    override fun getDefaultDownloadDirectory(): String {
+        val courierDir = File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+            "Courier"
+        )
+        if (!courierDir.exists()) {
+            courierDir.mkdirs()
+        }
+        return courierDir.absolutePath
+    }
+
+    override fun getAppStorageDirectory(): String {
+        return context.filesDir.absolutePath
+    }
+}
+
+actual fun getPlatformActions(): PlatformActions = PlatformActionsAndroid()

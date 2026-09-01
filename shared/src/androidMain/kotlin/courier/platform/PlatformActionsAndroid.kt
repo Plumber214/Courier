@@ -116,6 +116,17 @@ class PlatformActionsAndroid : PlatformActions {
         return courierDir.absolutePath
     }
 
+    override fun getBuildTimestamp(): String? {
+        return try {
+            val info = context.packageManager.getPackageInfo(context.packageName, 0)
+            val formatter = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US)
+            formatter.format(java.util.Date(info.lastUpdateTime))
+        } catch (e: Exception) {
+            Log.w("Courier", "Could not read build timestamp", e)
+            null
+        }
+    }
+
     override fun getAppStorageDirectory(): String {
         return context.filesDir.absolutePath
     }

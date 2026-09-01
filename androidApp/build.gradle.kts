@@ -5,6 +5,9 @@ plugins {
     kotlin("android")
 }
 
+val courierVersion: String = providers.gradleProperty("courier.versionName").get()
+val courierBuild: Int = providers.gradleProperty("courier.buildNumber").get().toInt()
+
 android {
     namespace = "courier.android"
     compileSdk = 35
@@ -13,8 +16,8 @@ android {
         applicationId = "com.courier.app"
         minSdk = 24
         targetSdk = 35
-        versionCode = 15
-        versionName = "1.2.0"
+        versionCode = courierBuild
+        versionName = courierVersion
 
         ndk {
             abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64"))
@@ -44,6 +47,49 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    lint {
+        abortOnError = false
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Release packaging — mirrors desktopApp's publishDesktopRelease.
+//
+// Uses assembleDebug because that is what has actually been shipped: the release
+// buildType has no signing config, so an assembleRelease APK would be unsigned
+// and non-installable. Switch this to assembleRelease once signing is set up.
+// ---------------------------------------------------------------------------
+
+val androidReleaseDir = rootProject.layout.projectDirectory.dir("release")
+
+val publishAndroidVersioned by tasks.registering(Copy::class) {
+    dependsOn("assembleDebug")
+    from(layout.buildDirectory.dir("outputs/apk/debug")) { include("*.apk") }
+    into(androidReleaseDir)
+    rename { "Courier-Android-v$courierVersion.apk" }
+}
+
+val publishAndroidLatest by tasks.registering(Copy::class) {
+    dependsOn("assembleDebug")
+    from(layout.buildDirectory.dir("outputs/apk/debug")) { include("*.apk") }
+    into(androidReleaseDir)
+    rename { "Courier-Android-latest.apk" }
+}
+
+tasks.register("publishAndroidRelease") {
+    group = "courier"
+    description = "Builds the Android APK and publishes it to release/ as both " +
+        "Courier-Android-v$courierVersion.apk and Courier-Android-latest.apk."
+    dependsOn(publishAndroidVersioned, publishAndroidLatest)
+
+    val outFile = androidReleaseDir.file("Courier-Android-latest.apk").asFile
+    doLast {
+        if (!outFile.isFile) {
+            throw GradleException("publishAndroidRelease produced no APK at ${outFile.absolutePath}.")
+        }
+        logger.lifecycle("Published ${outFile.absolutePath} (${outFile.length() / 1024 / 1024} MB)")
     }
 }
 

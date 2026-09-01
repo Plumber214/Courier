@@ -9,6 +9,15 @@ interface PlatformActions {
     fun chooseDirectory(): String?
     fun getDefaultDownloadDirectory(): String
     fun getAppStorageDirectory(): String
+
+    /**
+     * When the artifact currently executing was built, as "yyyy-MM-dd HH:mm",
+     * or null if it cannot be determined (e.g. running from loose classes).
+     *
+     * Read from the running jar/APK, not baked in at compile time, so it always
+     * describes what is actually running.
+     */
+    fun getBuildTimestamp(): String?
 }
 
 expect fun getPlatformActions(): PlatformActions

@@ -109,6 +109,24 @@ class PlatformActionsDesktop : PlatformActions {
         return downloadsDir.absolutePath
     }
 
+    override fun getBuildTimestamp(): String? {
+        return try {
+            val source = PlatformActionsDesktop::class.java
+                .protectionDomain?.codeSource?.location ?: return null
+            val file = File(source.toURI())
+            if (!file.exists()) return null
+            // Running from a jar: the jar's mtime. Running from loose classes
+            // (Gradle run): the classes dir mtime, which is still the last build.
+            val instant = java.time.Instant.ofEpochMilli(file.lastModified())
+            java.time.format.DateTimeFormatter
+                .ofPattern("yyyy-MM-dd HH:mm")
+                .withZone(java.time.ZoneId.systemDefault())
+                .format(instant)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     override fun getAppStorageDirectory(): String {
         val appData = System.getenv("APPDATA")
         val baseDir = if (!appData.isNullOrBlank()) {

@@ -61,6 +61,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.datetime.toLocalDateTime
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.ui.semantics.Role
 import courier.platform.getPlatformActions
@@ -626,8 +627,15 @@ fun SettingsScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(modifier = Modifier.height(2.dp))
+                            val lastCheckedText = if (settings.lastEngineUpdateCheckEpochMs > 0) {
+                                val instant = kotlinx.datetime.Instant.fromEpochMilliseconds(settings.lastEngineUpdateCheckEpochMs)
+                                val local = instant.toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault())
+                                "Checked ${local.year}-${local.monthNumber.toString().padStart(2, '0')}-${local.dayOfMonth.toString().padStart(2, '0')}"
+                            } else {
+                                "Checked: Never"
+                            }
                             Text(
-                                "Version: ${uiState.binaryVersion.ifBlank { "Embedded" }}",
+                                "Version: ${uiState.binaryVersion.ifBlank { "Embedded" }} • $lastCheckedText",
                                 color = AccentCyan,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium

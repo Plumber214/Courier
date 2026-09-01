@@ -120,16 +120,29 @@ class SettingsViewModel(
         settingsRepository.updateSettings(settings.value.copy(transcodeCodec = codec))
     }
 
-    fun checkAndUpdateBinaries() {
+    init {
+        val now = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
+        val sevenDaysMs = 7L * 24 * 60 * 60 * 1000L
+        if (now - settings.value.lastEngineUpdateCheckEpochMs > sevenDaysMs) {
+            checkAndUpdateBinaries(isAutoCheck = true)
+        }
+    }
+
+    fun checkAndUpdateBinaries(isAutoCheck: Boolean = false) {
         if (_uiState.value.isUpdatingBinaries) return
 
-        _uiState.value = _uiState.value.copy(
-            isUpdatingBinaries = true,
-            updateStatusMessage = "Checking for yt-dlp updates..."
-        )
+        if (!isAutoCheck) {
+            _uiState.value = _uiState.value.copy(
+                isUpdatingBinaries = true,
+                updateStatusMessage = "Checking for yt-dlp updates..."
+            )
+        }
 
         scope.launch {
             val result = binaryManager.updateBinaries()
+            val now = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
+            settingsRepository.updateSettings(settings.value.copy(lastEngineUpdateCheckEpochMs = now))
+
             result.fold(
                 onSuccess = { msg ->
                     _uiState.value = _uiState.value.copy(
@@ -141,7 +154,7 @@ class SettingsViewModel(
                 onFailure = { err ->
                     _uiState.value = _uiState.value.copy(
                         isUpdatingBinaries = false,
-                        updateStatusMessage = "Update check failed: ${err.message ?: "Network error"}"
+                        updateStatusMessage = if (!isAutoCheck) "Update check failed: ${err.message ?: "Network error"}" else null
                     )
                 }
             )

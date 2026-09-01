@@ -47,5 +47,6 @@ data class AppSettings(
     // Defaults to EDITING_NATIVE: a download that will not import into an editor
     // is not a successful download for this app's purpose.
     val outputProfile: OutputProfile = OutputProfile.EDITING_NATIVE,
-    val transcodeCodec: TranscodeCodec = TranscodeCodec.H264
+    val transcodeCodec: TranscodeCodec = TranscodeCodec.H264,
+    val lastEngineUpdateCheckEpochMs: Long = 0L
 )

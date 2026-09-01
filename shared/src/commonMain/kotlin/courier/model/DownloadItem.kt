@@ -40,7 +40,12 @@ data class DownloadItem(
     val outputProfile: OutputProfile = OutputProfile.EDITING_NATIVE,
     val transcodeCodec: TranscodeCodec = TranscodeCodec.H264,
     /** vcodec of the chosen rendition, when known — lets the engine skip a pointless re-encode. */
-    val selectedVcodec: String? = null
+    val selectedVcodec: String? = null,
+    val formatId: String? = null,
+    val destinationDir: String? = null,
+    val outputPaths: List<String> = emptyList(),
+    val partialPath: String? = null,
+    val resumeAttempts: Int = 0
 ) {
     val isFinished: Boolean
         get() = status == DownloadStatus.COMPLETED || status == DownloadStatus.FAILED || status == DownloadStatus.CANCELLED

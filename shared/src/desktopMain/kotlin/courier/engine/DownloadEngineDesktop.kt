@@ -106,7 +106,7 @@ class DownloadEngineDesktop : DownloadEngine {
         outputDir: String,
         cookieBrowser: String?,
         onProgress: (progress: Float, speed: String?, eta: String?, downloaded: String?, total: String?) -> Unit
-    ): Result<String> = withContext(Dispatchers.IO) {
+    ): Result<List<String>> = withContext(Dispatchers.IO) {
         val ytDlp = BinaryManagerDesktop.getYtDlpExecutable()
         val ffmpeg = BinaryManagerDesktop.getFfmpegExecutable()
 
@@ -226,7 +226,7 @@ class DownloadEngineDesktop : DownloadEngine {
         // (a login-walled video, say) while the other downloads fine. Only
         // report failure when nothing at all landed.
         return@withContext if (allWritten.isNotEmpty()) {
-            Result.success(allWritten.first())
+            Result.success(allWritten)
         } else {
             Result.failure(lastFailure ?: Exception("Download produced no files."))
         }

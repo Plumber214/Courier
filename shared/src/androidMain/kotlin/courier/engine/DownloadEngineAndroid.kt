@@ -118,7 +118,7 @@ class DownloadEngineAndroid : DownloadEngine {
         outputDir: String,
         cookieBrowser: String?,
         onProgress: (progress: Float, speed: String?, eta: String?, downloaded: String?, total: String?) -> Unit
-    ): Result<String> = withContext(Dispatchers.IO) {
+    ): Result<List<String>> = withContext(Dispatchers.IO) {
         try {
             ensureInitialized()
             val outDir = File(outputDir)
@@ -278,7 +278,7 @@ class DownloadEngineAndroid : DownloadEngine {
                 Log.w("Courier", "MediaScanner error", scanErr)
             }
 
-            Result.success(resolvedPath)
+            Result.success(if (writtenFiles.isNotEmpty()) writtenFiles else listOf(resolvedPath))
         } catch (e: Exception) {
             Log.e("Courier", "downloadVideo failed", e)
             Result.failure(e)

@@ -12,7 +12,7 @@ interface DownloadEngine {
         outputDir: String,
         cookieBrowser: String? = null,
         onProgress: (progress: Float, speed: String?, eta: String?, downloaded: String?, total: String?) -> Unit
-    ): Result<String>
+    ): Result<List<String>>
     
     fun cancelDownload(id: String)
     suspend fun updateEngine(): Result<String>

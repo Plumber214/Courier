@@ -127,11 +127,13 @@ class DownloadManager(
             createdAtEpochMs = currentEpochMs(),
             outputProfile = settings.value.outputProfile,
             transcodeCodec = settings.value.transcodeCodec,
-            selectedVcodec = format?.vcodec
+            selectedVcodec = format?.vcodec,
+            formatId = format?.formatId,
+            destinationDir = destinationDir
         )
 
         repository.addOrUpdate(item)
-        triggerQueueProcessing(format?.formatId, destinationDir)
+        triggerQueueProcessing()
     }
 
     fun cancelDownload(id: String) {
@@ -148,7 +150,7 @@ class DownloadManager(
             if (item != null && !item.isFinished) {
                 repository.addOrUpdate(item.copy(status = DownloadStatus.CANCELLED, errorMessage = "Cancelled by user"))
             }
-            triggerQueueProcessing(null, null)
+            triggerQueueProcessing()
         }
     }
 
@@ -190,17 +192,22 @@ class DownloadManager(
                 etaFormatted = null
             )
         )
-        triggerQueueProcessing(null, null)
+        triggerQueueProcessing()
     }
 
     fun removeDownload(id: String, deleteDiskFile: Boolean = true) {
         cancelDownload(id)
         val item = repository.downloads.value.find { it.id == id }
-        if (deleteDiskFile && !item?.outputPath.isNullOrBlank()) {
-            try {
-                getPlatformActions().deleteFile(item!!.outputPath!!)
-            } catch (e: Exception) {
-                println("Error deleting physical file: ${e.message}")
+        if (deleteDiskFile && item != null) {
+            val pathsToDelete = (item.outputPaths + listOfNotNull(item.outputPath)).distinct()
+            for (path in pathsToDelete) {
+                if (path.isNotBlank()) {
+                    try {
+                        getPlatformActions().deleteFile(path)
+                    } catch (e: Exception) {
+                        println("Error deleting physical file $path: ${e.message}")
+                    }
+                }
             }
         }
         repository.remove(id)
@@ -220,7 +227,7 @@ class DownloadManager(
         return getPlatformActions().openFolder(path)
     }
 
-    private fun triggerQueueProcessing(preferredFormatId: String?, destinationDir: String?) {
+    private fun triggerQueueProcessing() {
         scope.launch {
             queueMutex.withLock {
                 val maxConcurrent = settings.value.maxConcurrentDownloads.coerceIn(1, 5)
@@ -234,17 +241,18 @@ class DownloadManager(
                     .take(slotsAvailable)
 
                 for (queuedItem in queuedItems) {
-                    startDownloadJob(queuedItem, preferredFormatId, destinationDir)
+                    startDownloadJob(queuedItem)
                 }
             }
         }
     }
 
-    private fun startDownloadJob(item: DownloadItem, formatId: String?, customOutputDir: String?) {
+    private fun startDownloadJob(item: DownloadItem) {
         val job = scope.launch {
-            val outputDir = customOutputDir ?: settings.value.downloadDirectory.ifBlank {
+            val outputDir = item.destinationDir ?: settings.value.downloadDirectory.ifBlank {
                 getPlatformActions().getDefaultDownloadDirectory()
             }
+            val formatId = item.formatId
             val cookieBrowser = settings.value.selectedCookieBrowser.let {
                 if (it == "None" || it.isBlank()) null else it.lowercase()
             }
@@ -299,14 +307,16 @@ class DownloadManager(
             repository.clearProgress(item.id)
 
             result.fold(
-                onSuccess = { filePath ->
+                onSuccess = { filePaths ->
+                    val primaryPath = filePaths.firstOrNull()
                     val updated = repository.downloads.value.find { it.id == item.id }
                     if (updated != null) {
                         repository.addOrUpdate(
                             updated.copy(
                                 status = DownloadStatus.COMPLETED,
                                 progressPercent = 100f,
-                                outputPath = filePath,
+                                outputPath = primaryPath,
+                                outputPaths = filePaths,
                                 speedFormatted = null,
                                 etaFormatted = null
                             )
@@ -330,7 +340,7 @@ class DownloadManager(
                 activeJobs.remove(item.id)
                 lastMetricUpdateTimes.remove(item.id)
             }
-            triggerQueueProcessing(null, null)
+            triggerQueueProcessing()
         }
 
         scope.launch {

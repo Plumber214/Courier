@@ -127,6 +127,40 @@ object FormatSelector {
         return !isEditorFriendlyCodec(selectedVcodec)
     }
 
+    /** Sample rate every professional NLE and broadcast spec works in. */
+    private const val EDITING_SAMPLE_RATE = "48000"
+
+    /**
+     * Arguments that normalise audio to 48 kHz during the existing merge.
+     *
+     * YouTube's AAC is 44.1 kHz. Premiere works natively at 48 kHz and has to
+     * *conform* anything else, generating cache files; a stale or failed conform
+     * is a well-known source of audio that imports subtly wrong while playing
+     * fine everywhere else. Emitting 48 kHz removes that step entirely.
+     *
+     * This rides on the merge ffmpeg call that already runs, so it costs no
+     * extra pass, and video is explicitly stream-copied — only audio is touched.
+     *
+     * Scope: this only applies when yt-dlp actually merges separate video and
+     * audio streams. A site that serves one pre-muxed file (often Instagram or
+     * TikTok) skips the merge, and its audio is left alone. Forcing a second
+     * ffmpeg pass on every download to close that gap is not worth it for a
+     * convenience this small.
+     *
+     * [OutputProfile.MAX_QUALITY] is deliberately exempt: it is the "give me the
+     * original streams untouched" profile, and re-encoding audio there would
+     * contradict it.
+     */
+    fun audioNormalisationArgs(profile: OutputProfile): List<String> =
+        if (profile == OutputProfile.MAX_QUALITY) {
+            emptyList()
+        } else {
+            listOf(
+                "--postprocessor-args",
+                "Merger:-c:v copy -c:a aac -ar $EDITING_SAMPLE_RATE -b:a 192k"
+            )
+        }
+
     /**
      * yt-dlp arguments that re-encode the finished file to [codec].
      *
@@ -140,21 +174,21 @@ object FormatSelector {
             "--recode-video", "mp4",
             "--postprocessor-args",
             "VideoConvertor:-c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p " +
-                "-c:a aac -b:a 192k -movflags +faststart -fps_mode cfr"
+                "-c:a aac -ar $EDITING_SAMPLE_RATE -b:a 192k -movflags +faststart -fps_mode cfr"
         )
 
         TranscodeCodec.PRORES -> listOf(
             "--recode-video", "mov",
             "--postprocessor-args",
             "VideoConvertor:-c:v prores_ks -profile:v 3 -pix_fmt yuv422p10le " +
-                "-c:a pcm_s16le -fps_mode cfr"
+                "-c:a pcm_s16le -ar $EDITING_SAMPLE_RATE -fps_mode cfr"
         )
 
         TranscodeCodec.DNXHR -> listOf(
             "--recode-video", "mov",
             "--postprocessor-args",
             "VideoConvertor:-c:v dnxhd -profile:v dnxhr_hq -pix_fmt yuv422p " +
-                "-c:a pcm_s16le -fps_mode cfr"
+                "-c:a pcm_s16le -ar $EDITING_SAMPLE_RATE -fps_mode cfr"
         )
     }
 }

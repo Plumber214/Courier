@@ -149,7 +149,11 @@ class DownloadEngineDesktop : DownloadEngine {
             )
             addAll(listOf("-f", formatArg, "--merge-output-format", container))
             if (FormatSelector.needsTranscode(item.outputProfile, item.selectedVcodec, item.transcodeCodec)) {
+                // The transcode re-encodes audio at 48 kHz itself; normalising
+                // during the merge as well would just encode it twice.
                 addAll(FormatSelector.transcodeArgs(item.transcodeCodec))
+            } else {
+                addAll(FormatSelector.audioNormalisationArgs(item.outputProfile))
             }
         }
 

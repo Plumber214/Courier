@@ -1,4 +1,4 @@
-﻿package courier.util
+package courier.util
 
 import courier.platform.getPlatformActions
 
@@ -8,7 +8,7 @@ object AppVersion {
     const val MAJOR = 1
     const val MINOR = 3
     const val PATCH = 0
-    const val BUILD_NUMBER = 18
+    const val BUILD_NUMBER = 19
     const val VERSION_NAME = "1.3.0"
     const val RELEASE_DATE = "2026.09.01"
     const val GIT_BRANCH = "main"

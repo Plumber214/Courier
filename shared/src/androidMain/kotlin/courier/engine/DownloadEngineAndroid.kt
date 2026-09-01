@@ -159,13 +159,18 @@ class DownloadEngineAndroid : DownloadEngine {
                 addOption("-f", formatArg)
                 addOption("--merge-output-format", container)
 
-                if (FormatSelector.needsTranscode(item.outputProfile, item.selectedVcodec, item.transcodeCodec)) {
-                    val args = FormatSelector.transcodeArgs(item.transcodeCodec)
-                    var i = 0
-                    while (i < args.size - 1) {
-                        addOption(args[i], args[i + 1])
-                        i += 2
+                // The transcode re-encodes audio at 48 kHz itself; normalising
+                // during the merge as well would just encode it twice.
+                val ppArgs =
+                    if (FormatSelector.needsTranscode(item.outputProfile, item.selectedVcodec, item.transcodeCodec)) {
+                        FormatSelector.transcodeArgs(item.transcodeCodec)
+                    } else {
+                        FormatSelector.audioNormalisationArgs(item.outputProfile)
                     }
+                var i = 0
+                while (i < ppArgs.size - 1) {
+                    addOption(ppArgs[i], ppArgs[i + 1])
+                    i += 2
                 }
             }
 

@@ -38,4 +38,16 @@ object UrlValidator {
         // Strip trailing punctuation often caught in share messages (e.g. url, or url.)
         return extracted.trimEnd('.', ',', '!', '?', ';', ':', ')', ']', '}')
     }
+
+    enum class MediaHint { LIKELY_VIDEO, LIKELY_PHOTO, UNKNOWN }
+
+    fun hintFor(url: String): MediaHint {
+        val lower = url.lowercase()
+        return when {
+            lower.contains("/reel/") || lower.contains("/reels/") || lower.contains("/tv/") ||
+            lower.contains("watch?v=") || lower.contains("/videos/") || lower.contains("fb.watch") -> MediaHint.LIKELY_VIDEO
+            lower.contains("/photo/") || lower.contains("photo.php") || lower.contains("fbid=") || lower.contains("/media/set/") -> MediaHint.LIKELY_PHOTO
+            else -> MediaHint.UNKNOWN
+        }
+    }
 }

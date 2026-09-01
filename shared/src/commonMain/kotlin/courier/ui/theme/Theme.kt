@@ -19,6 +19,10 @@ val SurfaceDark = Color(0xEB131422)
 val SurfaceCard = Color(0xDC1B1E32) // Frosted glass card
 val SurfaceCardHover = Color(0xEE22263F)
 val SurfaceVariantDark = Color(0xCC262A48) // Translucent chips and badges
+val TitleBarBg = Color(0x660B0D18)
+val CloseButtonHover = Color(0xFFE81123)
+val PlayerOverlayBg = Color(0xBA000000)
+val PlayerSurfaceBg = Color(0xF20E1120)
 
 // Glass Borders & Refractions
 val CardBorderDark = Color(0x554E5680)

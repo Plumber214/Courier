@@ -20,7 +20,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -35,6 +35,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -75,10 +77,11 @@ fun UrlInputBar(
                 onValueChange = onUrlChange,
                 modifier = Modifier
                     .weight(1f)
-                    .height(54.dp),
+                    .height(54.dp)
+                    .semantics { contentDescription = "Video URL Input" },
                 placeholder = {
                     Text(
-                        "Paste a video link...",
+                        "Paste a video or photo link...",
                         color = TextMuted,
                         fontSize = 14.sp
                     )
@@ -104,7 +107,7 @@ fun UrlInputBar(
                             IconButton(onClick = onClearClick, modifier = Modifier.size(34.dp)) {
                                 Icon(
                                     imageVector = Icons.Default.Clear,
-                                    contentDescription = "Clear",
+                                    contentDescription = "Clear URL",
                                     tint = TextSecondary,
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -119,7 +122,7 @@ fun UrlInputBar(
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.ContentPaste,
-                                    contentDescription = "Paste",
+                                    contentDescription = "Paste from clipboard",
                                     tint = AccentCyan,
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -188,13 +191,13 @@ fun UrlInputBar(
                         horizontalArrangement = Arrangement.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = null,
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Fetch",
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "Download",
+                            text = "Fetch",
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
                             maxLines = 1,
@@ -240,6 +243,7 @@ fun PlatformBadge(
             .background(bg, RoundedCornerShape(8.dp))
             .border(1.dp, borderColor, RoundedCornerShape(8.dp))
             .padding(horizontal = 9.dp, vertical = 5.dp)
+            .semantics { contentDescription = platform.displayName }
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(

@@ -4,6 +4,7 @@ import courier.engine.DownloadEngine
 import courier.engine.UrlValidator
 import courier.manager.DownloadManager
 import courier.model.DownloadItem
+import courier.model.MediaType
 import courier.model.Platform
 import courier.model.VideoFormat
 import courier.model.VideoInfo
@@ -107,11 +108,12 @@ class HomeViewModel(
         )
 
         scope.launch {
+            val resolvedUrl = courier.engine.ShareLinkResolver.resolve(clean)
             val cookieBrowser = downloadManager.settings.value.selectedCookieBrowser.let {
                 if (it == "None" || it.isBlank()) null else it.lowercase()
             }
 
-            val result = engine.fetchVideoInfo(clean, cookieBrowser)
+            val result = engine.fetchVideoInfo(resolvedUrl, cookieBrowser)
             result.fold(
                 onSuccess = { info ->
                     _uiState.value = _uiState.value.copy(
@@ -122,33 +124,24 @@ class HomeViewModel(
                     )
                 },
                 onFailure = { err ->
-                    val fallbackInfo = VideoInfo(
-                        id = "vid_${clean.hashCode()}",
-                        url = clean,
-                        title = "${Platform.fromUrl(clean).displayName} Video",
-                        platform = Platform.fromUrl(clean),
-                        formats = listOf(
-                            VideoFormat("best", "Best Available Quality", resolution = "Highest", ext = "mp4"),
-                            VideoFormat("1080p", "1080p Full HD", resolution = "1080p", ext = "mp4"),
-                            VideoFormat("720p", "720p HD", resolution = "720p", ext = "mp4"),
-                            VideoFormat("480p", "480p SD", resolution = "480p", ext = "mp4"),
-                            VideoFormat("360p", "360p Standard", resolution = "360p", ext = "mp4"),
-                            VideoFormat("bestaudio", "Best Audio Quality (M4A)", ext = "m4a", isAudioOnly = true),
-                            VideoFormat("mp3", "MP3 Audio (Converted 320kbps)", ext = "mp3", isAudioOnly = true)
-                        )
-                    )
                     _uiState.value = _uiState.value.copy(
                         isAnalyzing = false,
-                        previewInfo = fallbackInfo,
-                        showQualityPicker = true,
-                        analysisError = null
+                        previewInfo = null,
+                        showQualityPicker = false,
+                        analysisError = courier.engine.ExtractionError.friendlyMessage(err, resolvedUrl)
                     )
                 }
             )
         }
     }
 
-    fun confirmDownload(format: VideoFormat?, isAudioOnly: Boolean, destinationDir: String? = null) {
+    fun confirmDownload(
+        format: VideoFormat?,
+        isAudioOnly: Boolean,
+        destinationDir: String? = null,
+        mediaType: MediaType = _uiState.value.previewInfo?.mediaType ?: (if (isAudioOnly) MediaType.AUDIO else MediaType.VIDEO),
+        selectedGalleryIndices: List<Int> = emptyList()
+    ) {
         val info = _uiState.value.previewInfo
         val url = info?.url ?: _uiState.value.inputUrl
         if (url.isBlank()) return
@@ -158,7 +151,9 @@ class HomeViewModel(
             videoInfo = info,
             format = format,
             isAudioOnly = isAudioOnly,
-            destinationDir = destinationDir
+            destinationDir = destinationDir,
+            mediaType = mediaType,
+            selectedGalleryIndices = selectedGalleryIndices
         )
 
         _uiState.value = _uiState.value.copy(

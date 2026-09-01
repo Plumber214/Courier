@@ -3,6 +3,24 @@ package courier.model
 import kotlinx.serialization.Serializable
 
 @Serializable
+enum class MediaType {
+    VIDEO,
+    AUDIO,
+    IMAGE,
+    GALLERY
+}
+
+@Serializable
+data class GalleryEntry(
+    val index: Int, // 1-based index for yt-dlp --playlist-items
+    val id: String,
+    val title: String? = null,
+    val thumbnailUrl: String? = null,
+    val directUrl: String? = null,
+    val isVideo: Boolean = false
+)
+
+@Serializable
 data class VideoInfo(
     val id: String,
     val url: String,
@@ -12,7 +30,9 @@ data class VideoInfo(
     val thumbnailUrl: String? = null,
     val platform: Platform = Platform.OTHER,
     val formats: List<VideoFormat> = emptyList(),
-    val directVideoUrl: String? = null
+    val directVideoUrl: String? = null,
+    val mediaType: MediaType = MediaType.VIDEO,
+    val galleryEntries: List<GalleryEntry> = emptyList()
 ) {
     val formattedDuration: String
         get() {

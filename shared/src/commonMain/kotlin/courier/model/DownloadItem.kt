@@ -19,7 +19,28 @@ data class DownloadItem(
     val outputPath: String? = null,
     val isAudioOnly: Boolean = false,
     val formatLabel: String? = null,
-    val createdAtEpochMs: Long = 0L
+    val mediaType: MediaType = MediaType.VIDEO,
+    val selectedGalleryIndices: List<Int> = emptyList(),
+    /**
+     * Which of [selectedGalleryIndices] are videos rather than photos.
+     *
+     * Instagram carousels mix the two. Photos need `--write-thumbnail
+     * --skip-download`, videos need normal format selection, and applying the
+     * photo flags to a whole mixed carousel saves each video's thumbnail as a
+     * still and skips the video entirely. The engine splits on this and runs
+     * one yt-dlp pass per kind.
+     */
+    val galleryVideoIndices: List<Int> = emptyList(),
+    val galleryCount: Int? = null,
+    val createdAtEpochMs: Long = 0L,
+
+    // Captured at enqueue time rather than read from settings at download time,
+    // so changing the setting mid-queue cannot alter an in-flight download and
+    // a retry after restart reproduces the original request exactly.
+    val outputProfile: OutputProfile = OutputProfile.EDITING_NATIVE,
+    val transcodeCodec: TranscodeCodec = TranscodeCodec.H264,
+    /** vcodec of the chosen rendition, when known — lets the engine skip a pointless re-encode. */
+    val selectedVcodec: String? = null
 ) {
     val isFinished: Boolean
         get() = status == DownloadStatus.COMPLETED || status == DownloadStatus.FAILED || status == DownloadStatus.CANCELLED

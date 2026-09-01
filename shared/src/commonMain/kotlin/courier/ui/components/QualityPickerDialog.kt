@@ -49,6 +49,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
 import courier.model.Platform
 import courier.model.VideoFormat
 import courier.model.VideoInfo
@@ -59,9 +61,11 @@ import courier.ui.theme.CardBorderFocused
 import courier.ui.theme.GlassBorderGradient
 import courier.ui.theme.PrimaryIndigo
 import courier.ui.theme.PrimaryIndigoLight
+import courier.ui.theme.SuccessGreen
 import courier.ui.theme.SurfaceCard
 import courier.ui.theme.SurfaceDark
 import courier.ui.theme.SurfaceVariantDark
+import courier.ui.theme.WarningOrange
 import courier.ui.theme.TextMuted
 import courier.ui.theme.TextPrimary
 import courier.ui.theme.TextSecondary
@@ -71,32 +75,39 @@ fun QualityPickerDialog(
     videoInfo: VideoInfo,
     defaultDownloadDir: String,
     savedLocations: List<String>,
+    defaultQuality: String = "best",
     onDismiss: () -> Unit,
     onConfirm: (format: VideoFormat?, isAudioOnly: Boolean, destinationDir: String?) -> Unit
 ) {
-    var isAudioOnly by remember { mutableStateOf(false) }
+    val initialAudioOnly = defaultQuality == "audio_only"
+    var isAudioOnly by remember { mutableStateOf(initialAudioOnly) }
     var selectedLocation by remember { mutableStateOf(defaultDownloadDir) }
 
+    val isVideoLike = videoInfo.mediaType == courier.model.MediaType.VIDEO || videoInfo.mediaType == courier.model.MediaType.AUDIO
     val videoFormats = remember(videoInfo) {
         val extracted = videoInfo.formats.filter { !it.isAudioOnly }
-        val standardList = listOf(
-            VideoFormat("best", "Best Available Quality", resolution = "Highest", ext = "mp4"),
-            VideoFormat("1080p", "1080p Full HD", resolution = "1080p", ext = "mp4"),
-            VideoFormat("720p", "720p HD", resolution = "720p", ext = "mp4"),
-            VideoFormat("480p", "480p SD", resolution = "480p", ext = "mp4"),
-            VideoFormat("360p", "360p Standard", resolution = "360p", ext = "mp4")
-        )
-        if (extracted.isEmpty()) {
-            standardList
+        if (!isVideoLike) {
+            extracted
         } else {
-            val combined = mutableListOf<VideoFormat>()
-            combined.add(VideoFormat("best", "Best Available Quality", resolution = "Highest", ext = "mp4"))
-            for (f in extracted) {
-                if (f.formatId != "best" && combined.none { it.resolution == f.resolution }) {
-                    combined.add(f)
+            val standardList = listOf(
+                VideoFormat("best", "Best Available Quality", resolution = "Highest", ext = "mp4"),
+                VideoFormat("1080p", "1080p Full HD", resolution = "1080p", ext = "mp4"),
+                VideoFormat("720p", "720p HD", resolution = "720p", ext = "mp4"),
+                VideoFormat("480p", "480p SD", resolution = "480p", ext = "mp4"),
+                VideoFormat("360p", "360p Standard", resolution = "360p", ext = "mp4")
+            )
+            if (extracted.isEmpty()) {
+                standardList
+            } else {
+                val combined = mutableListOf<VideoFormat>()
+                combined.add(VideoFormat("best", "Best Available Quality", resolution = "Highest", ext = "mp4"))
+                for (f in extracted) {
+                    if (f.formatId != "best" && combined.none { it.resolution == f.resolution }) {
+                        combined.add(f)
+                    }
                 }
+                if (combined.size <= 1) standardList else combined
             }
-            if (combined.size <= 1) standardList else combined
         }
     }
 
@@ -109,8 +120,19 @@ fun QualityPickerDialog(
         if (extracted.isEmpty()) standardAudio else standardAudio
     }
 
-    var selectedFormat by remember(isAudioOnly) {
-        mutableStateOf(if (isAudioOnly) audioFormats.firstOrNull() else videoFormats.firstOrNull())
+    var selectedFormat by remember(isAudioOnly, videoInfo, defaultQuality) {
+        if (isAudioOnly) {
+            mutableStateOf(audioFormats.firstOrNull())
+        } else {
+            val preselected = when (defaultQuality) {
+                "1080p" -> videoFormats.find { it.resolution == "1080p" || it.formatId == "1080p" }
+                "720p" -> videoFormats.find { it.resolution == "720p" || it.formatId == "720p" }
+                "480p" -> videoFormats.find { it.resolution == "480p" || it.formatId == "480p" }
+                "360p" -> videoFormats.find { it.resolution == "360p" || it.formatId == "360p" }
+                else -> videoFormats.firstOrNull()
+            } ?: videoFormats.firstOrNull()
+            mutableStateOf(preselected)
+        }
     }
 
     val platformColor = Color(videoInfo.platform.brandColorHex)
@@ -332,7 +354,11 @@ fun QualityPickerDialog(
                                 .fillMaxWidth()
                                 .background(itemBg, RoundedCornerShape(10.dp))
                                 .border(1.dp, itemBorder, RoundedCornerShape(10.dp))
-                                .clickable { selectedFormat = fmt }
+                                .selectable(
+                                    selected = isSelected,
+                                    role = Role.RadioButton,
+                                    onClick = { selectedFormat = fmt }
+                                )
                                 .padding(horizontal = 10.dp, vertical = 9.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
@@ -358,18 +384,45 @@ fun QualityPickerDialog(
                                 )
                             }
 
-                            if (fmt.ext.isNotBlank()) {
-                                Box(
-                                    modifier = Modifier
-                                        .background(SurfaceVariantDark, RoundedCornerShape(5.dp))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        text = fmt.ext.uppercase(),
-                                        color = AccentCyan,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                // Editor-compatibility badge. Only meaningful when the
+                                // codec is actually known — the synthetic preset entries
+                                // ("1080p", "best") carry no vcodec, so they get no badge
+                                // rather than a guessed one.
+                                if (!isAudioOnly && fmt.vcodec != null) {
+                                    val friendly = fmt.isEditorFriendly
+                                    Box(
+                                        modifier = Modifier
+                                            .background(
+                                                if (friendly) SuccessGreen.copy(alpha = 0.18f)
+                                                else WarningOrange.copy(alpha = 0.18f),
+                                                RoundedCornerShape(5.dp)
+                                            )
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = if (friendly) "Editor-ready" else "Needs conversion",
+                                            color = if (friendly) SuccessGreen else WarningOrange,
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                }
+
+                                if (fmt.ext.isNotBlank()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .background(SurfaceVariantDark, RoundedCornerShape(5.dp))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = fmt.ext.uppercase(),
+                                            color = AccentCyan,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
                             }
                         }

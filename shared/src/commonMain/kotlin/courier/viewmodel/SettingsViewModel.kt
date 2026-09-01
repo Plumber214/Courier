@@ -3,6 +3,8 @@ package courier.viewmodel
 import courier.data.SettingsRepository
 import courier.engine.BinaryManager
 import courier.model.AppSettings
+import courier.model.OutputProfile
+import courier.model.TranscodeCodec
 import courier.platform.getPlatformActions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -84,6 +86,14 @@ class SettingsViewModel(
 
     fun updateCookieBrowser(browser: String) {
         settingsRepository.updateSettings(settings.value.copy(selectedCookieBrowser = browser))
+    }
+
+    fun updateOutputProfile(profile: OutputProfile) {
+        settingsRepository.updateSettings(settings.value.copy(outputProfile = profile))
+    }
+
+    fun updateTranscodeCodec(codec: TranscodeCodec) {
+        settingsRepository.updateSettings(settings.value.copy(transcodeCodec = codec))
     }
 
     fun checkAndUpdateBinaries() {

@@ -1,4 +1,4 @@
-package courier.ui.components
+ï»¿package courier.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -60,88 +61,73 @@ fun ClipboardPrompt(
     ) {
         if (detectedUrl == null) return@AnimatedVisibility
         val platform = Platform.fromUrl(detectedUrl)
+        val platformColor = Color(platform.brandColorHex)
 
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(SurfaceCard, RoundedCornerShape(16.dp))
-                .border(1.dp, AccentCyan.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
-                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .background(SurfaceCard, RoundedCornerShape(18.dp))
+                .border(1.dp, AccentCyan.copy(alpha = 0.45f), RoundedCornerShape(18.dp))
+                .padding(14.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                // Top Header: Paste icon + Platform pill + Title + Dismiss button
                 Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .background(AccentCyan.copy(alpha = 0.18f), RoundedCornerShape(10.dp))
-                            .border(1.dp, AccentCyan.copy(alpha = 0.4f), RoundedCornerShape(10.dp)),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.ContentPaste,
-                            contentDescription = null,
-                            tint = AccentCyan,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                "Link detected in clipboard",
-                                color = TextPrimary,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .background(AccentCyan.copy(alpha = 0.18f), RoundedCornerShape(8.dp))
+                                .border(1.dp, AccentCyan.copy(alpha = 0.4f), RoundedCornerShape(8.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ContentPaste,
+                                contentDescription = null,
+                                tint = AccentCyan,
+                                modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                        }
+
+                        Spacer(modifier = Modifier.width(10.dp))
+
+                        // Platform Pill Badge
+                        Box(
+                            modifier = Modifier
+                                .background(platformColor.copy(alpha = 0.22f), RoundedCornerShape(6.dp))
+                                .border(1.dp, platformColor.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 7.dp, vertical = 2.dp)
+                        ) {
                             Text(
-                                "• ${platform.displayName}",
-                                color = Color(platform.brandColorHex),
-                                fontSize = 12.sp,
+                                text = platform.displayName,
+                                color = platformColor,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
                             )
                         }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
                         Text(
-                            detectedUrl,
-                            color = TextSecondary,
-                            fontSize = 11.sp,
+                            text = "Link detected",
+                            color = TextPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Button(
-                        onClick = onAccept,
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = PrimaryIndigo,
-                            contentColor = Color.White
-                        ),
-                        modifier = Modifier.padding(end = 6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = null,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Download", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
 
                     IconButton(
                         onClick = onDismiss,
-                        modifier = Modifier.size(30.dp)
+                        modifier = Modifier.size(28.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
@@ -149,6 +135,49 @@ fun ClipboardPrompt(
                             tint = TextMuted,
                             modifier = Modifier.size(16.dp)
                         )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Detected URL container
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(SurfaceVariantDark.copy(alpha = 0.7f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 10.dp, vertical = 7.dp)
+                ) {
+                    Text(
+                        text = detectedUrl,
+                        color = TextSecondary,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Action Button: Full-width Download button
+                Button(
+                    onClick = onAccept,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(40.dp),
+                    shape = RoundedCornerShape(11.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = PrimaryIndigo,
+                        contentColor = Color.White
+                    )
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Fetch & Download", fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }

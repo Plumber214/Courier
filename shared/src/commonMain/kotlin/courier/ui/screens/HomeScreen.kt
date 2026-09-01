@@ -34,6 +34,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayCircleOutline
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -58,10 +59,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import courier.manager.DownloadManager
 import courier.model.DownloadStatus
+import courier.model.MediaType
 import courier.model.Platform
 import courier.ui.components.ClipboardPrompt
 import courier.ui.components.DownloadItemCard
+import courier.platform.getPlatformActions
+import courier.ui.components.GalleryPickerDialog
 import courier.ui.components.MediaPlayerModal
+import courier.ui.components.PhotoPickerDialog
 import courier.ui.components.QualityPickerDialog
 import courier.ui.components.SetupWizardDialog
 import courier.ui.components.UrlInputBar
@@ -156,7 +161,7 @@ fun HomeScreen(
                             letterSpacing = 0.5.sp
                         )
                         Text(
-                            text = "Video & Audio Downloader",
+                            text = "Video, Photo & Audio Downloader",
                             fontSize = 11.sp,
                             color = TextMuted,
                             fontWeight = FontWeight.Medium
@@ -168,7 +173,13 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (activeCount > 0 || queuedCount > 0) {
+                    val statusParts = buildList {
+                        if (activeCount > 0) add("$activeCount Active")
+                        if (queuedCount > 0) add("$queuedCount Queued")
+                    }
+                    val statusText = statusParts.joinToString(" • ")
+
+                    if (statusText.isNotBlank()) {
                         Box(
                             modifier = Modifier
                                 .background(PrimaryIndigo.copy(alpha = 0.28f), RoundedCornerShape(10.dp))
@@ -176,7 +187,7 @@ fun HomeScreen(
                                 .padding(horizontal = 10.dp, vertical = 6.dp)
                         ) {
                             Text(
-                                text = if (activeCount > 0) "$activeCount Active" else "$queuedCount Queued",
+                                text = statusText,
                                 color = AccentCyan,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
@@ -299,19 +310,46 @@ fun HomeScreen(
             // Error message if any
             if (uiState.analysisError != null) {
                 Spacer(modifier = Modifier.height(10.dp))
-                Box(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(AccentPink.copy(alpha = 0.15f), RoundedCornerShape(10.dp))
-                        .border(1.dp, AccentPink.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-                        .padding(12.dp)
+                        .background(AccentPink.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                        .border(1.dp, AccentPink.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text(
-                        text = uiState.analysisError ?: "",
-                        color = AccentPink,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Error",
+                            tint = AccentPink,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = uiState.analysisError ?: "",
+                            color = AccentPink,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    if (uiState.analysisError?.contains("Settings", ignoreCase = true) == true) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .background(SurfaceVariantDark, RoundedCornerShape(8.dp))
+                                .border(1.dp, CardBorderDark, RoundedCornerShape(8.dp))
+                                .clickable { onOpenSettings() }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Text("Settings", color = AccentCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
 
@@ -330,18 +368,37 @@ fun HomeScreen(
                     color = TextPrimary
                 )
 
-                if (completedCount > 0) {
-                    Text(
-                        text = "Clear finished ($completedCount)",
-                        fontSize = 12.sp,
-                        color = AccentCyan,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier
-                            .background(SurfaceVariantDark, RoundedCornerShape(8.dp))
-                            .border(1.dp, CardBorderDark, RoundedCornerShape(8.dp))
-                            .clickable { downloadManager.clearCompleted() }
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                    )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (activeCount > 0 || queuedCount > 0) {
+                        Text(
+                            text = "Cancel all",
+                            fontSize = 12.sp,
+                            color = AccentPink,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .background(AccentPink.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
+                                .border(1.dp, AccentPink.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                .clickable { downloadManager.cancelAll() }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+
+                    if (completedCount > 0) {
+                        Text(
+                            text = "Clear finished ($completedCount)",
+                            fontSize = 12.sp,
+                            color = AccentCyan,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .background(SurfaceVariantDark, RoundedCornerShape(8.dp))
+                                .border(1.dp, CardBorderDark, RoundedCornerShape(8.dp))
+                                .clickable { downloadManager.clearCompleted() }
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
                 }
             }
 
@@ -452,7 +509,8 @@ fun HomeScreen(
                                         dismissingItemIds.remove(item.id)
                                     }
                                 },
-                                onOpenFile = { homeViewModel.openMediaPreview(item) },
+                                onPreviewMedia = { homeViewModel.openMediaPreview(item) },
+                                onCopyLink = { getPlatformActions().setClipboardText(item.url) },
                                 onOpenFolder = { downloadManager.openDownloadFolder(item) }
                             )
                         }
@@ -475,17 +533,56 @@ fun HomeScreen(
             )
         }
 
-        // Quality picker dialog with destination selection
+        // Media picker dialog (Gallery, Single Photo, or Video Quality)
         if (uiState.showQualityPicker && uiState.previewInfo != null) {
-            QualityPickerDialog(
-                videoInfo = uiState.previewInfo!!,
-                defaultDownloadDir = settings.downloadDirectory,
-                savedLocations = settings.savedDownloadLocations,
-                onDismiss = homeViewModel::dismissQualityPicker,
-                onConfirm = { format, isAudioOnly, destinationDir ->
-                    homeViewModel.confirmDownload(format, isAudioOnly, destinationDir)
+            val preview = uiState.previewInfo!!
+            when (preview.mediaType) {
+                MediaType.GALLERY -> {
+                    GalleryPickerDialog(
+                        videoInfo = preview,
+                        defaultDownloadDir = settings.downloadDirectory,
+                        savedLocations = settings.savedDownloadLocations,
+                        onDismiss = homeViewModel::dismissQualityPicker,
+                        onConfirm = { selectedIndices, destinationDir ->
+                            homeViewModel.confirmDownload(
+                                format = null,
+                                isAudioOnly = false,
+                                destinationDir = destinationDir,
+                                mediaType = MediaType.GALLERY,
+                                selectedGalleryIndices = selectedIndices
+                            )
+                        }
+                    )
                 }
-            )
+                MediaType.IMAGE -> {
+                    PhotoPickerDialog(
+                        videoInfo = preview,
+                        defaultDownloadDir = settings.downloadDirectory,
+                        savedLocations = settings.savedDownloadLocations,
+                        onDismiss = homeViewModel::dismissQualityPicker,
+                        onConfirm = { destinationDir ->
+                            homeViewModel.confirmDownload(
+                                format = preview.formats.firstOrNull(),
+                                isAudioOnly = false,
+                                destinationDir = destinationDir,
+                                mediaType = MediaType.IMAGE
+                            )
+                        }
+                    )
+                }
+                else -> {
+                    QualityPickerDialog(
+                        videoInfo = preview,
+                        defaultDownloadDir = settings.downloadDirectory,
+                        savedLocations = settings.savedDownloadLocations,
+                        defaultQuality = settings.defaultQuality,
+                        onDismiss = homeViewModel::dismissQualityPicker,
+                        onConfirm = { format, isAudioOnly, destinationDir ->
+                            homeViewModel.confirmDownload(format, isAudioOnly, destinationDir)
+                        }
+                    )
+                }
+            }
         }
 
         // First launch setup wizard dialog (Desktop)

@@ -62,7 +62,7 @@ class AndroidMediaPlayerController(
                 }
                 setOnCompletionListener {
                     _isPlaying.value = false
-                    _currentPositionMs.value = _durationMs.value
+                    _currentPositionMs.value = 0L
                 }
                 prepareAsync()
             }

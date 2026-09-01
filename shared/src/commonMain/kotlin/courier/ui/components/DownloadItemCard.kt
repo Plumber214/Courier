@@ -1,4 +1,4 @@
-package courier.ui.components
+﻿package courier.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -20,21 +20,32 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -46,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import courier.model.DownloadItem
 import courier.model.DownloadStatus
+import courier.model.MediaType
 import courier.model.Platform
 import courier.ui.theme.AccentCyan
 import courier.ui.theme.AccentPink
@@ -66,7 +78,8 @@ fun DownloadItemCard(
     onCancel: () -> Unit,
     onRetry: () -> Unit,
     onRemove: () -> Unit,
-    onOpenFile: () -> Unit,
+    onPreviewMedia: () -> Unit,
+    onCopyLink: () -> Unit,
     onOpenFolder: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -76,6 +89,16 @@ fun DownloadItemCard(
     )
 
     val platformColor = Color(item.platform.brandColorHex)
+    val isPhotoOrGallery = item.mediaType == MediaType.IMAGE || item.mediaType == MediaType.GALLERY
+    val canPreview = item.status == DownloadStatus.COMPLETED
+
+    var justCopied by remember(item.id) { mutableStateOf(false) }
+    LaunchedEffect(justCopied) {
+        if (justCopied) {
+            kotlinx.coroutines.delay(1500)
+            justCopied = false
+        }
+    }
 
     Box(
         modifier = modifier
@@ -88,13 +111,21 @@ fun DownloadItemCard(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Live Video Thumbnail / Platform Fallback
+            // Live Video/Photo Thumbnail / Platform Fallback.
+            // The thumbnail itself is the preview affordance — the old play
+            // button was removed in favour of this, so it carries an explicit
+            // overlay to stay discoverable as a tap target.
             Box(
                 modifier = Modifier
                     .size(width = 100.dp, height = 72.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(SurfaceVariantDark)
-                    .border(1.dp, CardBorderDark, RoundedCornerShape(12.dp)),
+                    .border(1.dp, CardBorderDark, RoundedCornerShape(12.dp))
+                    .clickable(
+                        enabled = canPreview,
+                        role = Role.Button,
+                        onClickLabel = if (isPhotoOrGallery) "View photo" else "Play video"
+                    ) { onPreviewMedia() },
                 contentAlignment = Alignment.Center
             ) {
                 NetworkImage(
@@ -102,13 +133,35 @@ fun DownloadItemCard(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    // Fallback placeholder icon
+                    // Fallback placeholder icon based on media type
+                    val placeholderIcon = when (item.mediaType) {
+                        MediaType.GALLERY -> Icons.Default.Collections
+                        MediaType.IMAGE -> Icons.Default.Image
+                        MediaType.AUDIO -> Icons.Default.MusicNote
+                        MediaType.VIDEO -> Icons.Default.VideoLibrary
+                    }
                     Icon(
-                        imageVector = Icons.Default.VideoLibrary,
+                        imageVector = placeholderIcon,
                         contentDescription = null,
                         tint = platformColor.copy(alpha = 0.9f),
                         modifier = Modifier.size(32.dp)
                     )
+                }
+
+                if (canPreview) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.28f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isPhotoOrGallery) Icons.Default.Visibility else Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.9f),
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                 }
 
                 // Platform tag in bottom corner
@@ -146,7 +199,7 @@ fun DownloadItemCard(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // Format & Info
+                // Format & Info Badges
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -179,43 +232,41 @@ fun DownloadItemCard(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Progress Bar or Status Message
+                // Status & Progress View
                 when (item.status) {
                     DownloadStatus.DOWNLOADING -> {
-                        Column {
+                        Column(modifier = Modifier.fillMaxWidth()) {
                             LinearProgressIndicator(
                                 progress = { animatedProgress },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(7.dp)
-                                    .clip(RoundedCornerShape(4.dp)),
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp)),
                                 color = AccentCyan,
                                 trackColor = SurfaceVariantDark,
                                 strokeCap = StrokeCap.Round
                             )
 
-                            Spacer(modifier = Modifier.height(7.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                val progressText = "${item.progressPercent.toInt()}%"
-                                val speedText = item.speedFormatted?.let { " � $it" } ?: ""
                                 Text(
-                                    text = "$progressText$speedText",
-                                    color = TextPrimary,
+                                    "${(item.progressPercent).toInt()}%" + (if (item.speedFormatted != null) " • ${item.speedFormatted}" else ""),
+                                    color = AccentCyan,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold
                                 )
 
-                                val etaText = item.etaFormatted?.let { "ETA $it" } ?: ""
-                                Text(
-                                    text = etaText,
-                                    color = TextSecondary,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
+                                if (item.etaFormatted != null) {
+                                    Text(
+                                        "ETA: ${item.etaFormatted}",
+                                        color = TextSecondary,
+                                        fontSize = 11.sp
+                                    )
+                                }
                             }
                         }
                     }
@@ -228,7 +279,7 @@ fun DownloadItemCard(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                "Finalizing media stream...",
+                                "Merging audio & video...",
                                 color = AccentCyan,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold
@@ -245,7 +296,7 @@ fun DownloadItemCard(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                "Queued (Waiting for available slot)",
+                                "Queued",
                                 color = WarningOrange,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium
@@ -321,22 +372,35 @@ fun DownloadItemCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (item.status == DownloadStatus.COMPLETED) {
-                    IconButton(
-                        onClick = onOpenFile,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .background(PrimaryIndigo, CircleShape)
-                            .border(1.dp, AccentCyan.copy(alpha = 0.5f), CircleShape)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "Play Video",
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp)
+                // Copy link is available at every status, not only when complete:
+                // a failed download's URL is exactly what you want to grab, to
+                // retry elsewhere or to report the problem.
+                IconButton(
+                    onClick = {
+                        onCopyLink()
+                        justCopied = true
+                    },
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(
+                            if (justCopied) SuccessGreen.copy(alpha = 0.22f) else SurfaceVariantDark,
+                            CircleShape
                         )
-                    }
+                        .border(
+                            1.dp,
+                            if (justCopied) SuccessGreen else CardBorderDark,
+                            CircleShape
+                        )
+                ) {
+                    Icon(
+                        imageVector = if (justCopied) Icons.Default.Check else Icons.Default.Link,
+                        contentDescription = if (justCopied) "Link copied" else "Copy link",
+                        tint = if (justCopied) SuccessGreen else TextPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
 
+                if (item.status == DownloadStatus.COMPLETED) {
                     IconButton(
                         onClick = onOpenFolder,
                         modifier = Modifier

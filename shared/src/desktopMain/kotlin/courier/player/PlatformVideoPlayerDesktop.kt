@@ -67,6 +67,7 @@ class DesktopMediaPlayerController(
 
                     player.setOnEndOfMedia {
                         _isPlaying.value = false
+                        _currentPositionMs.value = 0L
                         player.seek(javafx.util.Duration.ZERO)
                     }
 

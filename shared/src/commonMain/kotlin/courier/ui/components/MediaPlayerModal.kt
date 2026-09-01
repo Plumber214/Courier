@@ -66,8 +66,11 @@ import courier.model.DownloadItem
 import courier.player.PlatformVideoPlayerSurface
 import courier.player.rememberMediaPlayerController
 import courier.ui.theme.AccentCyan
+import courier.ui.theme.BgDark
 import courier.ui.theme.CardBorderDark
 import courier.ui.theme.GlassBorderGradient
+import courier.ui.theme.PlayerOverlayBg
+import courier.ui.theme.PlayerSurfaceBg
 import courier.ui.theme.PrimaryIndigo
 import courier.ui.theme.SurfaceVariantDark
 import courier.ui.theme.TextMuted
@@ -101,7 +104,7 @@ fun MediaPlayerModal(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xBA000000))
+                .background(PlayerOverlayBg)
                 .clickable { onDismiss() },
             contentAlignment = Alignment.Center
         ) {
@@ -111,7 +114,7 @@ fun MediaPlayerModal(
                     .clip(RoundedCornerShape(22.dp))
                     .border(1.5.dp, GlassBorderGradient, RoundedCornerShape(22.dp))
                     .clickable(enabled = false) {}, // Prevent dismiss on modal click
-                color = Color(0xF20E1120),
+                color = PlayerSurfaceBg,
                 shape = RoundedCornerShape(22.dp)
             ) {
                 Column(
@@ -214,7 +217,7 @@ fun MediaPlayerModal(
                             .fillMaxWidth()
                             .aspectRatio(16f / 9f)
                             .clip(RoundedCornerShape(16.dp))
-                            .background(Color(0xFF06070B))
+                            .background(BgDark)
                             .border(1.dp, CardBorderDark, RoundedCornerShape(16.dp)),
                         contentAlignment = Alignment.Center
                     ) {
@@ -456,7 +459,7 @@ private fun AudioVisualizerView(
             Box(
                 modifier = Modifier
                     .size(24.dp)
-                    .background(Color(0xFF090A10), CircleShape)
+                    .background(BgDark, CircleShape)
                     .border(1.5.dp, Color.White.copy(alpha = 0.7f), CircleShape)
             )
         }

@@ -1,13 +1,15 @@
 package courier.engine
 
 import courier.model.DownloadItem
+import courier.model.GalleryEntry
+import courier.model.MediaType
 import courier.model.Platform
 import courier.model.VideoFormat
 import courier.model.VideoInfo
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
@@ -18,6 +20,8 @@ import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
+import kotlin.coroutines.coroutineContext
 
 class DownloadEngineDesktop : DownloadEngine {
     private val runningProcesses = ConcurrentHashMap<String, Process>()
@@ -31,8 +35,8 @@ class DownloadEngineDesktop : DownloadEngine {
             ytDlp.absolutePath,
             "--dump-single-json",
             "--no-warnings",
-            "--no-playlist",
             "--no-check-certificates",
+            "--ignore-no-formats-error",
             "--extractor-args", "youtube:player_client=android,web;player_skip=configs,webpage"
         )
 
@@ -46,13 +50,15 @@ class DownloadEngineDesktop : DownloadEngine {
 
         cmd.add(url)
 
+        var process: Process? = null
         try {
             val pb = ProcessBuilder(cmd)
             pb.redirectErrorStream(false)
-            val process = pb.start()
+            val proc = pb.start()
+            process = proc
 
-            val stdoutReader = BufferedReader(InputStreamReader(process.inputStream, Charsets.UTF_8))
-            val stderrReader = BufferedReader(InputStreamReader(process.errorStream, Charsets.UTF_8))
+            val stdoutReader = BufferedReader(InputStreamReader(proc.inputStream, Charsets.UTF_8))
+            val stderrReader = BufferedReader(InputStreamReader(proc.errorStream, Charsets.UTF_8))
 
             val stdoutBuilder = StringBuilder()
             val stderrBuilder = StringBuilder()
@@ -69,81 +75,28 @@ class DownloadEngineDesktop : DownloadEngine {
 
             stdoutThread.join(30_000)
             stderrThread.join(30_000)
-            process.waitFor()
+
+            val exited = proc.waitFor(30, TimeUnit.SECONDS)
+            if (!exited) {
+                proc.destroyForcibly()
+                return@withContext Result.failure(Exception("yt-dlp fetchVideoInfo timed out after 30 seconds"))
+            }
 
             val rawJson = stdoutBuilder.toString().trim()
             if (rawJson.startsWith("{")) {
-                val jsonObject = json.parseToJsonElement(rawJson).jsonObject
-                val title = jsonObject["title"]?.jsonPrimitive?.contentOrNull ?: "${Platform.fromUrl(url).displayName} Video"
-                val id = jsonObject["id"]?.jsonPrimitive?.contentOrNull ?: "video_${url.hashCode()}"
-                val uploader = jsonObject["uploader"]?.jsonPrimitive?.contentOrNull
-                val duration = jsonObject["duration"]?.jsonPrimitive?.longOrNull
-                val thumbnail = jsonObject["thumbnail"]?.jsonPrimitive?.contentOrNull
-
-                val formatsList = mutableListOf<VideoFormat>()
-
-                // Standard quality options
-                formatsList.add(VideoFormat("best", "Best Available Quality", resolution = "Highest", ext = "mp4"))
-
-                val rawFormats = jsonObject["formats"]?.jsonArray
-                if (rawFormats != null) {
-                    val seenHeights = mutableSetOf<Int>()
-                    for (fmt in rawFormats) {
-                        val fmtObj = fmt.jsonObject
-                        val height = fmtObj["height"]?.jsonPrimitive?.intOrNull
-                        val ext = fmtObj["ext"]?.jsonPrimitive?.contentOrNull ?: "mp4"
-                        val vcodec = fmtObj["vcodec"]?.jsonPrimitive?.contentOrNull
-                        val fmtId = fmtObj["format_id"]?.jsonPrimitive?.contentOrNull ?: continue
-                        val fps = fmtObj["fps"]?.jsonPrimitive?.intOrNull
-                        val filesize = fmtObj["filesize"]?.jsonPrimitive?.longOrNull
-
-                        if (height != null && height >= 240 && !seenHeights.contains(height)) {
-                            seenHeights.add(height)
-                            val label = "${height}p" + (if (height >= 1080) " Full HD" else if (height >= 720) " HD" else " SD")
-                            formatsList.add(
-                                VideoFormat(
-                                    formatId = "${fmtId}+bestaudio/best",
-                                    qualityLabel = label,
-                                    resolution = "${height}p",
-                                    ext = ext,
-                                    fileSizeBytes = filesize,
-                                    fps = fps,
-                                    isAudioOnly = false
-                                )
-                            )
-                        }
-                    }
-                }
-
-                // Add standard fallback formats if list is small
-                if (formatsList.size <= 1) {
-                    formatsList.add(VideoFormat("1080p", "1080p Full HD", resolution = "1080p", ext = "mp4"))
-                    formatsList.add(VideoFormat("720p", "720p HD", resolution = "720p", ext = "mp4"))
-                    formatsList.add(VideoFormat("480p", "480p SD", resolution = "480p", ext = "mp4"))
-                    formatsList.add(VideoFormat("360p", "360p Standard", resolution = "360p", ext = "mp4"))
-                }
-
-                // Add Audio options
-                formatsList.add(VideoFormat("bestaudio", "Best Audio Quality (M4A)", ext = "m4a", isAudioOnly = true))
-                formatsList.add(VideoFormat("mp3", "MP3 Audio (Converted 320kbps)", ext = "mp3", isAudioOnly = true))
-
-                val videoInfo = VideoInfo(
-                    id = id,
-                    url = url,
-                    title = title,
-                    uploader = uploader,
-                    durationSeconds = duration,
-                    thumbnailUrl = thumbnail,
-                    platform = Platform.fromUrl(url),
-                    formats = formatsList
-                )
-                Result.success(videoInfo)
+                Result.success(YtDlpJsonParser.parse(rawJson, url))
             } else {
-                val error = stderrBuilder.toString().trim().ifBlank { "Could not fetch video info" }
+                val error = stderrBuilder.toString().trim().ifBlank { "Could not fetch media info" }
                 Result.failure(Exception(error))
             }
         } catch (e: Exception) {
             Result.failure(e)
+        } finally {
+            try {
+                if (process?.isAlive == true) {
+                    process.destroyForcibly()
+                }
+            } catch (_: Exception) {}
         }
     }
 
@@ -162,44 +115,139 @@ class DownloadEngineDesktop : DownloadEngine {
             outDir.mkdirs()
         }
 
-        val outputTemplate = File(outDir, "%(title).100s.%(ext)s").absolutePath
+        val isGallery = item.mediaType == MediaType.GALLERY || item.selectedGalleryIndices.isNotEmpty()
+        val outputTemplate = if (isGallery) {
+            File(outDir, "%(title).80s_%(playlist_index)s.%(ext)s").absolutePath
+        } else {
+            File(outDir, "%(title).100s.%(ext)s").absolutePath
+        }
 
-        val cmd = mutableListOf(
+        val progressTemplate = """download:{"progress":"%(progress._percent_str)s","speed":"%(progress._speed_str)s","eta":"%(progress._eta_str)s","downloaded":"%(progress._downloaded_bytes_str)s","total":"%(progress._total_bytes_str)s"}"""
+
+        fun baseCommand() = mutableListOf(
             ytDlp.absolutePath,
             "--newline",
             "--progress",
-            "--progress-template", "[download] %(progress._percent_str)s | %(progress._speed_str)s | %(progress._eta_str)s | %(progress._downloaded_bytes_str)s | %(progress._total_bytes_str)s",
+            "--progress-template", progressTemplate,
             "--no-mtime",
             "--windows-filenames",
             "--no-check-certificates",
-            "--merge-output-format", "mp4",
             "--concurrent-fragments", "5",
             "-o", outputTemplate
         )
 
-        if (item.isAudioOnly) {
-            cmd.addAll(listOf("-x", "--audio-format", "mp3"))
-        } else {
-            val formatArg = when (formatId) {
-                null, "", "best" -> "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best"
-                "1080p" -> "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best"
-                "720p" -> "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best"
-                "480p" -> "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best"
-                "360p" -> "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=360]+bestaudio/best"
-                else -> formatId
+        /** yt-dlp flags that fetch a post's image rather than a video stream. */
+        fun MutableList<String>.addPhotoArgs() = addAll(
+            listOf("--ignore-no-formats-error", "--write-thumbnail", "--skip-download")
+        )
+
+        /** Codec-constrained video selection, plus a transcode pass when required. */
+        fun MutableList<String>.addVideoArgs() {
+            val formatArg = FormatSelector.videoFormatArg(formatId, item.outputProfile)
+            val container = FormatSelector.mergeOutputFormat(
+                item.outputProfile, item.selectedVcodec, item.transcodeCodec
+            )
+            addAll(listOf("-f", formatArg, "--merge-output-format", container))
+            if (FormatSelector.needsTranscode(item.outputProfile, item.selectedVcodec, item.transcodeCodec)) {
+                addAll(FormatSelector.transcodeArgs(item.transcodeCodec))
             }
-            cmd.addAll(listOf("-f", formatArg))
         }
 
-        if (!cookieBrowser.isNullOrBlank() && cookieBrowser != "none") {
-            cmd.addAll(listOf("--cookies-from-browser", cookieBrowser))
+        fun MutableList<String>.finish(): List<String> {
+            if (!cookieBrowser.isNullOrBlank() && cookieBrowser != "none") {
+                addAll(listOf("--cookies-from-browser", cookieBrowser))
+            }
+            if (ffmpeg != null) {
+                addAll(listOf("--ffmpeg-location", ffmpeg.parentFile.absolutePath))
+            }
+            add(item.url)
+            return this
         }
 
-        if (ffmpeg != null) {
-            cmd.addAll(listOf("--ffmpeg-location", ffmpeg.parentFile.absolutePath))
+        // Build one command per kind of media in this request.
+        //
+        // A mixed Instagram carousel needs two yt-dlp passes: the photo flags
+        // include --skip-download, which would otherwise skip the videos and
+        // leave only their thumbnails as stills.
+        val passes = mutableListOf<List<String>>()
+
+        if (item.isAudioOnly || item.mediaType == MediaType.AUDIO) {
+            passes.add(baseCommand().apply {
+                addAll(listOf("-f", "bestaudio/best", "-x", "--audio-format", "mp3"))
+            }.finish())
+        } else if (item.mediaType == MediaType.IMAGE) {
+            passes.add(baseCommand().apply { addPhotoArgs() }.finish())
+        } else if (isGallery) {
+            val selected = item.selectedGalleryIndices
+            val videoIdx = item.galleryVideoIndices.filter { selected.isEmpty() || it in selected }
+            val photoIdx = selected.filter { it !in videoIdx }
+
+            if (photoIdx.isNotEmpty() || selected.isEmpty()) {
+                passes.add(baseCommand().apply {
+                    addPhotoArgs()
+                    if (photoIdx.isNotEmpty()) {
+                        addAll(listOf("--playlist-items", photoIdx.joinToString(",")))
+                    }
+                }.finish())
+            }
+            if (videoIdx.isNotEmpty()) {
+                passes.add(baseCommand().apply {
+                    addVideoArgs()
+                    addAll(listOf("--playlist-items", videoIdx.joinToString(",")))
+                }.finish())
+            }
+        } else {
+            passes.add(baseCommand().apply { addVideoArgs() }.finish())
         }
 
-        cmd.add(item.url)
+        val allWritten = mutableListOf<String>()
+        var lastFailure: Exception? = null
+
+        for ((passIndex, cmd) in passes.withIndex()) {
+            val result = runPass(
+                cmd = cmd,
+                item = item,
+                outDir = outDir,
+                passIndex = passIndex,
+                passCount = passes.size,
+                onProgress = onProgress
+            )
+            result.fold(
+                onSuccess = { allWritten.addAll(it) },
+                onFailure = { lastFailure = it as? Exception ?: Exception(it.message) }
+            )
+        }
+
+        // Partial success still counts: on a mixed carousel one kind may fail
+        // (a login-walled video, say) while the other downloads fine. Only
+        // report failure when nothing at all landed.
+        return@withContext if (allWritten.isNotEmpty()) {
+            Result.success(allWritten.first())
+        } else {
+            Result.failure(lastFailure ?: Exception("Download produced no files."))
+        }
+    }
+
+    /**
+     * Runs one yt-dlp invocation and returns every output file it produced.
+     *
+     * [passIndex] and [passCount] scale reported progress so a two-pass mixed
+     * carousel advances 0-50% then 50-100% instead of resetting halfway.
+     */
+    private suspend fun runPass(
+        cmd: List<String>,
+        item: DownloadItem,
+        outDir: File,
+        passIndex: Int,
+        passCount: Int,
+        onProgress: (progress: Float, speed: String?, eta: String?, downloaded: String?, total: String?) -> Unit
+    ): Result<List<String>> = withContext(Dispatchers.IO) {
+        val passBase = passIndex * 100f / passCount
+        val passSpan = 100f / passCount
+        val scaled: (Float) -> Float = { raw -> passBase + (raw.coerceIn(0f, 100f) * passSpan / 100f) }
+        val report: (Float, String?, String?, String?, String?) -> Unit = { p, s, e, d, t ->
+            onProgress(scaled(p), s, e, d, t)
+        }
 
         try {
             val pb = ProcessBuilder(cmd)
@@ -207,19 +255,70 @@ class DownloadEngineDesktop : DownloadEngine {
             val process = pb.start()
             runningProcesses[item.id] = process
 
+            coroutineContext[Job]?.invokeOnCompletion {
+                process.destroyForcibly()
+                runningProcesses.remove(item.id)
+            }
+
             var finalFilePath: String? = null
             var lastErrorMessage: String? = null
+            val writtenFiles = mutableListOf<String>()
 
             val reader = BufferedReader(InputStreamReader(process.inputStream, Charsets.UTF_8))
             reader.forEachLine { line ->
                 val trimmed = line.trim()
-                if (trimmed.startsWith("[download]") && trimmed.contains("|")) {
-                    parseProgressLine(trimmed, onProgress)
+                if (trimmed.startsWith("download:{")) {
+                    parseJsonProgress(trimmed.removePrefix("download:"), report)
+                } else if (trimmed.startsWith("[download]") && trimmed.contains("|")) {
+                    parseProgressLine(trimmed, report)
+                } else if (trimmed.contains("Writing video thumbnail") && trimmed.contains(" to: ")) {
+                    val extracted = trimmed.substringAfter(" to: ").trim()
+                    if (extracted.isNotBlank()) {
+                        writtenFiles.add(extracted)
+                        finalFilePath = extracted
+                    }
+                    // --skip-download emits no [download] progress lines at all,
+                    // so progress here is synthesised from files written.
+                    val expected = when {
+                        item.selectedGalleryIndices.isNotEmpty() -> item.selectedGalleryIndices.size
+                        (item.galleryCount ?: 0) > 0 -> item.galleryCount ?: 1
+                        else -> 1
+                    }
+                    report((writtenFiles.size * 100f / expected).coerceIn(0f, 100f), null, null, null, null)
+                } else if (trimmed.contains("Downloading video thumbnail")) {
+                    if (writtenFiles.isEmpty()) {
+                        report(50f, null, null, null, null)
+                    }
                 } else if (trimmed.contains("[Merger] Merging formats into \"")) {
                     val extracted = trimmed.substringAfter("into \"").substringBefore("\"")
-                    if (extracted.isNotBlank()) finalFilePath = extracted
+                    if (extracted.isNotBlank()) {
+                        finalFilePath = extracted
+                        writtenFiles.add(extracted)
+                    }
+                } else if (trimmed.contains("[VideoConvertor] Converting video from") &&
+                    trimmed.contains("Destination: ")
+                ) {
+                    // The transcode renames the output (e.g. .mkv -> .mp4), so this
+                    // must override the earlier [Merger] path or we would report a
+                    // file that no longer exists.
+                    val extracted = trimmed.substringAfter("Destination: ").trim()
+                    if (extracted.isNotBlank()) {
+                        writtenFiles.remove(finalFilePath)
+                        finalFilePath = extracted
+                        writtenFiles.add(extracted)
+                    }
+                    report(99f, null, null, null, null)
+                } else if (trimmed.contains("[ExtractAudio] Destination: ")) {
+                    val extracted = trimmed.substringAfter("Destination: ").trim()
+                    if (extracted.isNotBlank()) {
+                        finalFilePath = extracted
+                        writtenFiles.add(extracted)
+                    }
                 } else if (trimmed.contains("[download] Destination: ")) {
                     val extracted = trimmed.substringAfter("Destination: ").trim()
+                    if (extracted.isNotBlank()) finalFilePath = extracted
+                } else if (trimmed.contains("[download]") && trimmed.contains("has already been downloaded")) {
+                    val extracted = trimmed.substringAfter("[download]").substringBefore("has already been downloaded").trim()
                     if (extracted.isNotBlank()) finalFilePath = extracted
                 } else if (trimmed.contains("ERROR:") || trimmed.contains("error:")) {
                     lastErrorMessage = trimmed
@@ -230,11 +329,22 @@ class DownloadEngineDesktop : DownloadEngine {
             runningProcesses.remove(item.id)
 
             if (exitCode == 0) {
-                val resolvedPath = finalFilePath ?: findNewestFileInDir(outDir) ?: outDir.absolutePath
-                Result.success(resolvedPath)
+                val existing = writtenFiles.filter { File(it).isFile }.distinct()
+                if (existing.isNotEmpty()) return@withContext Result.success(existing)
+
+                val fallback = finalFilePath?.takeIf { File(it).isFile }
+                    ?: findNewestFileInDir(outDir)
+                if (fallback != null && File(fallback).isFile) {
+                    Result.success(listOf(fallback))
+                } else {
+                    Result.failure(
+                        Exception(lastErrorMessage ?: "Download completed, but output file could not be located.")
+                    )
+                }
             } else {
-                val err = lastErrorMessage ?: "Download process exited with code $exitCode"
-                Result.failure(Exception(err))
+                Result.failure(
+                    Exception(lastErrorMessage ?: "Download process exited with code $exitCode")
+                )
             }
         } catch (e: Exception) {
             runningProcesses.remove(item.id)
@@ -255,6 +365,23 @@ class DownloadEngineDesktop : DownloadEngine {
         return BinaryManagerDesktop().updateBinaries()
     }
 
+    private fun parseJsonProgress(
+        jsonStr: String,
+        onProgress: (progress: Float, speed: String?, eta: String?, downloaded: String?, total: String?) -> Unit
+    ) {
+        try {
+            val jsonElement = json.parseToJsonElement(jsonStr).jsonObject
+            val percentRaw = jsonElement["progress"]?.jsonPrimitive?.contentOrNull?.replace("%", "")?.trim()
+            val percent = percentRaw?.toFloatOrNull() ?: 0f
+            val speed = jsonElement["speed"]?.jsonPrimitive?.contentOrNull?.ifBlank { null }
+            val eta = jsonElement["eta"]?.jsonPrimitive?.contentOrNull?.ifBlank { null }
+            val downloaded = jsonElement["downloaded"]?.jsonPrimitive?.contentOrNull?.ifBlank { null }
+            val total = jsonElement["total"]?.jsonPrimitive?.contentOrNull?.ifBlank { null }
+
+            onProgress(percent, speed, eta, downloaded, total)
+        } catch (_: Exception) {}
+    }
+
     private fun parseProgressLine(
         line: String,
         onProgress: (progress: Float, speed: String?, eta: String?, downloaded: String?, total: String?) -> Unit
@@ -272,18 +399,17 @@ class DownloadEngineDesktop : DownloadEngine {
 
                 onProgress(percent, speed, eta, downloaded, total)
             }
-        } catch (e: Exception) {
-            // Ignore format parsing hiccups
-        }
+        } catch (_: Exception) {}
     }
 
     private fun findNewestFileInDir(dir: File): String? {
         return try {
-            dir.listFiles()
-                ?.filter { it.isFile && !it.name.endsWith(".part") && !it.name.endsWith(".ytdl") }
-                ?.maxByOrNull { it.lastModified() }
-                ?.absolutePath
-        } catch (e: Exception) {
+            val cutoff = System.currentTimeMillis() - 180_000
+            val files = dir.listFiles()?.filter { it.isFile && !it.name.endsWith(".part") && !it.name.endsWith(".ytdl") }
+            val recent = files?.filter { it.lastModified() > cutoff }?.maxByOrNull { it.lastModified() }
+            if (recent != null) return recent.absolutePath
+            files?.maxByOrNull { it.lastModified() }?.absolutePath
+        } catch (_: Exception) {
             null
         }
     }

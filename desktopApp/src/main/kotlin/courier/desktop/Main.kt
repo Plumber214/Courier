@@ -40,13 +40,18 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.onPointerEvent
 import courier.ui.App
 import courier.ui.theme.CardBorderDark
+import courier.ui.theme.CloseButtonHover
 import courier.ui.theme.GlassBackground
 import courier.ui.theme.GlassBorderGradient
 import courier.ui.theme.PrimaryIndigo
 import courier.ui.theme.TextPrimary
 import courier.ui.theme.TextSecondary
+import courier.ui.theme.TitleBarBg
 import java.awt.Cursor
 import java.awt.Dimension
 import java.awt.Point
@@ -54,6 +59,7 @@ import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.awt.event.MouseMotionAdapter
 
+@OptIn(ExperimentalComposeUiApi::class)
 fun main() {
     System.setProperty("skiko.renderApi", "DIRECTX_12")
 
@@ -206,7 +212,7 @@ fun main() {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(40.dp)
-                                .background(Color(0x660B0D18))
+                                .background(TitleBarBg)
                                 .padding(start = 16.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
@@ -241,24 +247,32 @@ fun main() {
                             // Window Controls: Minimize, Maximize, Close
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 // Minimize
+                                var isMinHovered by remember { mutableStateOf(false) }
                                 Box(
                                     modifier = Modifier
                                         .size(46.dp, 40.dp)
+                                        .background(if (isMinHovered) Color(0x33FFFFFF) else Color.Transparent)
+                                        .onPointerEvent(PointerEventType.Enter) { isMinHovered = true }
+                                        .onPointerEvent(PointerEventType.Exit) { isMinHovered = false }
                                         .clickable { windowState.isMinimized = true },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.Minimize,
                                         contentDescription = "Minimize",
-                                        tint = TextSecondary,
+                                        tint = if (isMinHovered) Color.White else TextSecondary,
                                         modifier = Modifier.size(14.dp)
                                     )
                                 }
 
                                 // Maximize / Restore
+                                var isMaxHovered by remember { mutableStateOf(false) }
                                 Box(
                                     modifier = Modifier
                                         .size(46.dp, 40.dp)
+                                        .background(if (isMaxHovered) Color(0x33FFFFFF) else Color.Transparent)
+                                        .onPointerEvent(PointerEventType.Enter) { isMaxHovered = true }
+                                        .onPointerEvent(PointerEventType.Exit) { isMaxHovered = false }
                                         .clickable {
                                             windowState.placement = if (isMaximized) {
                                                 WindowPlacement.Floating
@@ -271,7 +285,7 @@ fun main() {
                                     Icon(
                                         imageVector = Icons.Default.CropSquare,
                                         contentDescription = "Maximize",
-                                        tint = TextSecondary,
+                                        tint = if (isMaxHovered) Color.White else TextSecondary,
                                         modifier = Modifier.size(13.dp)
                                     )
                                 }
@@ -281,7 +295,9 @@ fun main() {
                                 Box(
                                     modifier = Modifier
                                         .size(46.dp, 40.dp)
-                                        .background(if (isCloseHovered) Color(0xFFE81123) else Color.Transparent)
+                                        .background(if (isCloseHovered) CloseButtonHover else Color.Transparent)
+                                        .onPointerEvent(PointerEventType.Enter) { isCloseHovered = true }
+                                        .onPointerEvent(PointerEventType.Exit) { isCloseHovered = false }
                                         .clickable { exitApplication() },
                                     contentAlignment = Alignment.Center
                                 ) {

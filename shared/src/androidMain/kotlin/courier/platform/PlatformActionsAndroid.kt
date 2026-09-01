@@ -103,9 +103,43 @@ class PlatformActionsAndroid : PlatformActions {
         }
     }
 
-    override fun chooseDirectory(): String? {
-        // Android downloads default to Downloads/Courier
+    override suspend fun chooseDirectory(): String? {
+        // Android uses the state-driven DownloadLocationPickerDialog
         return null
+    }
+
+    override fun getStandardMediaRoots(): List<String> {
+        val roots = listOf(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC)
+        )
+        return roots.map { it.absolutePath }
+    }
+
+    override suspend fun probeDirectoryWritable(path: String): Result<Unit> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        try {
+            val dir = File(path)
+            if (!dir.exists()) {
+                val created = dir.mkdirs()
+                if (!created && !dir.exists()) {
+                    return@withContext Result.failure(Exception("Cannot create directory: $path"))
+                }
+            }
+            val testFile = File(dir, ".courier_probe_${System.currentTimeMillis()}.tmp")
+            testFile.writeText("courier_probe_ok", Charsets.UTF_8)
+            if (!testFile.exists() || testFile.readText() != "courier_probe_ok") {
+                testFile.delete()
+                return@withContext Result.failure(Exception("Write verification failed at: $path"))
+            }
+            testFile.delete()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e("Courier", "Probe failed for $path", e)
+            Result.failure(Exception("Location is not writable: ${e.message}"))
+        }
     }
 
     override fun getDefaultDownloadDirectory(): String {
@@ -137,4 +171,5 @@ class PlatformActionsAndroid : PlatformActions {
     override fun isAndroid(): Boolean = true
 }
 
-actual fun getPlatformActions(): PlatformActions = PlatformActionsAndroid()
+private val androidPlatformActionsInstance: PlatformActions by lazy { PlatformActionsAndroid() }
+actual fun getPlatformActions(): PlatformActions = androidPlatformActionsInstance

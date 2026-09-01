@@ -31,6 +31,24 @@ class SettingsViewModel(
     )
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
+    val defaultDownloadDirectory: String = getPlatformActions().getDefaultDownloadDirectory()
+
+    private val _showLocationPickerDialog = MutableStateFlow(false)
+    val showLocationPickerDialog: StateFlow<Boolean> = _showLocationPickerDialog.asStateFlow()
+
+    fun showLocationPicker() {
+        _showLocationPickerDialog.value = true
+    }
+
+    fun dismissLocationPicker() {
+        _showLocationPickerDialog.value = false
+    }
+
+    fun onLocationPicked(path: String) {
+        _showLocationPickerDialog.value = false
+        updateDownloadDirectory(path)
+    }
+
     fun updateDefaultQuality(quality: String) {
         settingsRepository.updateSettings(settings.value.copy(defaultQuality = quality))
     }
@@ -74,9 +92,15 @@ class SettingsViewModel(
     }
 
     fun browseAndAddLocation() {
-        val chosen = getPlatformActions().chooseDirectory()
-        if (!chosen.isNullOrBlank()) {
-            updateDownloadDirectory(chosen)
+        if (getPlatformActions().isAndroid()) {
+            showLocationPicker()
+        } else {
+            scope.launch {
+                val chosen = getPlatformActions().chooseDirectory()
+                if (!chosen.isNullOrBlank()) {
+                    updateDownloadDirectory(chosen)
+                }
+            }
         }
     }
 

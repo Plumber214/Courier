@@ -39,10 +39,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import kotlinx.coroutines.launch
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -136,6 +138,18 @@ fun QualityPickerDialog(
     }
 
     val platformColor = Color(videoInfo.platform.brandColorHex)
+    val scope = rememberCoroutineScope()
+    var showLocationPicker by remember { mutableStateOf(false) }
+
+    if (showLocationPicker) {
+        DownloadLocationPickerDialog(
+            onDismissRequest = { showLocationPicker = false },
+            onLocationSelected = { path ->
+                selectedLocation = path
+                showLocationPicker = false
+            }
+        )
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -475,9 +489,15 @@ fun QualityPickerDialog(
                             .background(SurfaceVariantDark, RoundedCornerShape(6.dp))
                             .border(1.dp, CardBorderDark, RoundedCornerShape(6.dp))
                             .clickable {
-                                val chosen = getPlatformActions().chooseDirectory()
-                                if (!chosen.isNullOrBlank()) {
-                                    selectedLocation = chosen
+                                if (getPlatformActions().isAndroid()) {
+                                    showLocationPicker = true
+                                } else {
+                                    scope.launch {
+                                        val chosen = getPlatformActions().chooseDirectory()
+                                        if (!chosen.isNullOrBlank()) {
+                                            selectedLocation = chosen
+                                        }
+                                    }
                                 }
                             }
                             .padding(horizontal = 8.dp, vertical = 4.dp)

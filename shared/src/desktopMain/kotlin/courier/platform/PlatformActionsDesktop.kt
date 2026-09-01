@@ -80,8 +80,8 @@ class PlatformActionsDesktop : PlatformActions {
         }
     }
 
-    override fun chooseDirectory(): String? {
-        return try {
+    override suspend fun chooseDirectory(): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName())
             val chooser = JFileChooser().apply {
                 fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
@@ -107,6 +107,40 @@ class PlatformActionsDesktop : PlatformActions {
             downloadsDir.mkdirs()
         }
         return downloadsDir.absolutePath
+    }
+
+    override fun getStandardMediaRoots(): List<String> {
+        val userHome = File(System.getProperty("user.home"))
+        val roots = listOf(
+            File(userHome, "Downloads"),
+            File(userHome, "Videos"),
+            File(userHome, "Pictures"),
+            File(userHome, "Music"),
+            File(userHome, "Documents")
+        )
+        return roots.filter { it.exists() }.map { it.absolutePath }
+    }
+
+    override suspend fun probeDirectoryWritable(path: String): Result<Unit> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        try {
+            val dir = File(path)
+            if (!dir.exists()) {
+                val created = dir.mkdirs()
+                if (!created && !dir.exists()) {
+                    return@withContext Result.failure(Exception("Cannot create directory: $path"))
+                }
+            }
+            val testFile = File(dir, ".courier_probe_${System.currentTimeMillis()}.tmp")
+            testFile.writeText("courier_probe_ok", Charsets.UTF_8)
+            if (!testFile.exists() || testFile.readText() != "courier_probe_ok") {
+                testFile.delete()
+                return@withContext Result.failure(Exception("Write test failed at $path"))
+            }
+            testFile.delete()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(Exception("Directory is not writable: ${e.message}"))
+        }
     }
 
     override fun getBuildTimestamp(): String? {
@@ -141,4 +175,5 @@ class PlatformActionsDesktop : PlatformActions {
     }
 }
 
-actual fun getPlatformActions(): PlatformActions = PlatformActionsDesktop()
+private val desktopPlatformActionsInstance: PlatformActions = PlatformActionsDesktop()
+actual fun getPlatformActions(): PlatformActions = desktopPlatformActionsInstance

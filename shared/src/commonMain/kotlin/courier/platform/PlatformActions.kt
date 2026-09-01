@@ -6,9 +6,11 @@ interface PlatformActions {
     fun openFile(filePath: String): Boolean
     fun openFolder(folderPath: String): Boolean
     fun deleteFile(filePath: String): Boolean
-    fun chooseDirectory(): String?
+    suspend fun chooseDirectory(): String?
     fun getDefaultDownloadDirectory(): String
     fun getAppStorageDirectory(): String
+    fun getStandardMediaRoots(): List<String> = emptyList()
+    suspend fun probeDirectoryWritable(path: String): Result<Unit> = Result.success(Unit)
 
     /**
      * When the artifact currently executing was built, as "yyyy-MM-dd HH:mm",

@@ -122,6 +122,14 @@ fun SettingsScreen(
 ) {
     val settings by viewModel.settings.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
+    val showLocationPicker by viewModel.showLocationPickerDialog.collectAsState()
+
+    if (showLocationPicker) {
+        courier.ui.components.DownloadLocationPickerDialog(
+            onDismissRequest = { viewModel.dismissLocationPicker() },
+            onLocationSelected = { viewModel.onLocationPicked(it) }
+        )
+    }
 
     Surface(
         modifier = modifier
@@ -140,43 +148,49 @@ fun SettingsScreen(
             // Header
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .height(54.dp),
+                    .fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
                     onClick = onBackClick,
                     modifier = Modifier
-                        .size(44.dp)
+                        .size(38.dp)
                         .background(SurfaceCard, CircleShape)
                         .border(1.dp, CardBorderDark, CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
-                        tint = TextPrimary,
-                        modifier = Modifier.size(22.dp)
+                        tint = AccentCyan,
+                        modifier = Modifier.size(18.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.width(16.dp))
+                Spacer(modifier = Modifier.width(14.dp))
 
-                Text(
-                    text = "Settings",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
-                )
+                Column {
+                    Text(
+                        text = "Settings",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = "Preferences & System Configuration",
+                        color = TextSecondary,
+                        fontSize = 12.sp
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             // Section: Storage & Saved Locations
             SettingsSectionHeader(title = "Download Locations", icon = Icons.Default.Folder)
 
             SettingsCard {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    val defaultDir = getPlatformActions().getDefaultDownloadDirectory()
+                    val defaultDir = viewModel.defaultDownloadDirectory
                     val activeDir = settings.downloadDirectory.ifBlank { defaultDir }
 
                     Text(

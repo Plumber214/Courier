@@ -5,6 +5,8 @@ import courier.data.SettingsRepository
 import courier.engine.BinaryManager
 import courier.engine.DownloadEngine
 import courier.model.DownloadItem
+import courier.model.DownloadStatus
+import courier.model.MediaType
 import courier.model.Platform
 import courier.model.VideoInfo
 import kotlinx.coroutines.CompletableDeferred
@@ -216,6 +218,73 @@ class DownloadManagerTest {
 
             val remaining = manager.downloads.value.find { it.id == item.id }
             assertNull(remaining, "Removed item must not appear in history as CANCELLED or any other status")
+            testScope.cancel()
+        }
+    }
+
+    @Test
+    fun testRestartAutoResumesInterruptedVideoDownload() {
+        runBlocking {
+            val repository = DownloadRepository()
+            val initialInterruptedItem = DownloadItem(
+                id = "interrupted_1",
+                url = "https://youtube.com/watch?v=interrupted",
+                title = "Interrupted Video",
+                status = DownloadStatus.DOWNLOADING,
+                mediaType = courier.model.MediaType.VIDEO,
+                resumeAttempts = 0
+            )
+            repository.saveDownloads(listOf(initialInterruptedItem))
+
+            val testScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+            val fakeEngine = FakeTestDownloadEngine()
+            val settingsRepo = SettingsRepository()
+            val binaryManager = FakeTestBinaryManager()
+
+            val manager = DownloadManager(
+                engine = fakeEngine,
+                repository = repository,
+                settingsRepository = settingsRepo,
+                binaryManager = binaryManager,
+                scope = testScope
+            )
+
+            val updated = repository.downloads.value.first()
+            assertEquals(1, updated.resumeAttempts, "resumeAttempts should increment from 0 to 1")
+            testScope.cancel()
+        }
+    }
+
+    @Test
+    fun testRestartFailsInterruptedDownloadAfterMaxResumeAttempts() {
+        runBlocking {
+            val repository = DownloadRepository()
+            val maxedOutItem = DownloadItem(
+                id = "interrupted_max",
+                url = "https://youtube.com/watch?v=maxed",
+                title = "Maxed Out Video",
+                status = DownloadStatus.DOWNLOADING,
+                mediaType = courier.model.MediaType.VIDEO,
+                resumeAttempts = 3
+            )
+            repository.saveDownloads(listOf(maxedOutItem))
+
+            val testScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+            val fakeEngine = FakeTestDownloadEngine()
+            val settingsRepo = SettingsRepository()
+            val binaryManager = FakeTestBinaryManager()
+
+            val manager = DownloadManager(
+                engine = fakeEngine,
+                repository = repository,
+                settingsRepository = settingsRepo,
+                binaryManager = binaryManager,
+                scope = testScope
+            )
+
+            val updated = repository.downloads.value.first()
+            assertEquals(DownloadStatus.FAILED, updated.status, "Downloads with >= 3 resume attempts should fail")
+            assertEquals(3, updated.resumeAttempts)
             testScope.cancel()
         }
     }

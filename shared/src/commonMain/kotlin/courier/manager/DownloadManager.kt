@@ -60,15 +60,31 @@ class DownloadManager(
     private val _isProcessingQueue = MutableStateFlow(false)
 
     init {
-        // Reset any downloads that were left in DOWNLOADING state upon app restart to FAILED / QUEUED
+        // Evaluate downloads left in active state upon app restart
         val current = repository.downloads.value.map { item ->
             if (item.status == DownloadStatus.DOWNLOADING || item.status == DownloadStatus.MERGING || item.status == DownloadStatus.FETCHING_INFO) {
-                item.copy(status = DownloadStatus.FAILED, errorMessage = "Interrupted by app restart")
+                val canResume = item.resumeAttempts < 3 && item.mediaType != MediaType.GALLERY && item.mediaType != MediaType.IMAGE
+                if (canResume) {
+                    val attempt = item.resumeAttempts + 1
+                    item.copy(
+                        status = DownloadStatus.QUEUED,
+                        resumeAttempts = attempt,
+                        errorMessage = "Resuming interrupted download (attempt $attempt/3)"
+                    )
+                } else {
+                    item.copy(
+                        status = DownloadStatus.FAILED,
+                        errorMessage = if (item.resumeAttempts >= 3) "Max resume attempts exceeded (3/3)" else "Interrupted by app restart"
+                    )
+                }
             } else {
                 item
             }
         }
         repository.saveDownloads(current)
+        if (current.any { it.status == DownloadStatus.QUEUED }) {
+            triggerQueueProcessing()
+        }
     }
 
     fun enqueueDownload(

@@ -102,7 +102,11 @@ object FormatSelector {
         profile: OutputProfile,
         selectedVcodec: String?,
         codec: TranscodeCodec
-    ): String = if (needsTranscode(profile, selectedVcodec, codec)) "mkv" else "mp4"
+    ): String = when {
+        needsTranscode(profile, selectedVcodec, codec) -> "mkv"
+        profile == OutputProfile.MAX_QUALITY -> "mkv"
+        else -> "mp4"
+    }
 
     /**
      * Whether a download selected with [profile] needs re-encoding.

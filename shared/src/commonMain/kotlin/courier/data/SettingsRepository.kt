@@ -17,16 +17,21 @@ class SettingsRepository {
     val settings: StateFlow<AppSettings> = _settings.asStateFlow()
 
     private fun loadSettings(): AppSettings {
-        return try {
-            val content = readTextFile(settingsFileName)
-            if (!content.isNullOrBlank()) {
-                json.decodeFromString<AppSettings>(content)
-            } else {
-                AppSettings(downloadDirectory = getPlatformActions().getDefaultDownloadDirectory())
+        val primaryContent = readTextFile(settingsFileName)
+        if (!primaryContent.isNullOrBlank()) {
+            try {
+                return json.decodeFromString<AppSettings>(primaryContent)
+            } catch (e: Exception) {
+                println("Failed to decode primary settings JSON: ${e.message}, attempting backup recovery")
             }
-        } catch (e: Exception) {
-            AppSettings(downloadDirectory = getPlatformActions().getDefaultDownloadDirectory())
         }
+        val backupContent = readTextFile("$settingsFileName.bak")
+        if (!backupContent.isNullOrBlank()) {
+            try {
+                return json.decodeFromString<AppSettings>(backupContent)
+            } catch (_: Exception) {}
+        }
+        return AppSettings(downloadDirectory = getPlatformActions().getDefaultDownloadDirectory())
     }
 
     fun updateSettings(newSettings: AppSettings) {

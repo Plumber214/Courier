@@ -29,16 +29,21 @@ class DownloadRepository {
     val progressMap: StateFlow<Map<String, DownloadProgress>> = _progressMap.asStateFlow()
 
     private fun loadDownloads(): List<DownloadItem> {
-        return try {
-            val content = readTextFile(historyFileName)
-            if (!content.isNullOrBlank()) {
-                json.decodeFromString(ListSerializer(DownloadItem.serializer()), content)
-            } else {
-                emptyList()
+        val primaryContent = readTextFile(historyFileName)
+        if (!primaryContent.isNullOrBlank()) {
+            try {
+                return json.decodeFromString(ListSerializer(DownloadItem.serializer()), primaryContent)
+            } catch (e: Exception) {
+                println("Failed to decode primary downloads JSON: ${e.message}, attempting backup recovery")
             }
-        } catch (e: Exception) {
-            emptyList()
         }
+        val backupContent = readTextFile("$historyFileName.bak")
+        if (!backupContent.isNullOrBlank()) {
+            try {
+                return json.decodeFromString(ListSerializer(DownloadItem.serializer()), backupContent)
+            } catch (_: Exception) {}
+        }
+        return emptyList()
     }
 
     private fun persistDownloads(items: List<DownloadItem>) {

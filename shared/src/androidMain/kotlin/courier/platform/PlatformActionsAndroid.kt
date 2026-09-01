@@ -43,8 +43,11 @@ class PlatformActionsAndroid : PlatformActions {
             )
 
             val mimeType = when (file.extension.lowercase()) {
-                "mp4", "mkv", "webm" -> "video/*"
-                "mp3", "m4a", "aac", "wav", "opus" -> "audio/*"
+                "mp4", "mkv", "webm", "mov", "m4v", "avi" -> "video/*"
+                "mp3", "m4a", "aac", "wav", "opus", "flac", "ogg" -> "audio/*"
+                // Without these, photos resolved to */* and the system offered a
+                // file-handler chooser instead of opening the gallery viewer.
+                "jpg", "jpeg", "png", "webp", "gif", "heic", "bmp" -> "image/*"
                 else -> "*/*"
             }
 

@@ -509,7 +509,24 @@ fun HomeScreen(
                                         dismissingItemIds.remove(item.id)
                                     }
                                 },
-                                onPreviewMedia = { homeViewModel.openMediaPreview(item) },
+                                onPreviewMedia = {
+                                    // Photos and galleries hand off to the OS image
+                                    // viewer rather than rendering in-app: the
+                                    // built-in preview never displayed them, and the
+                                    // system viewer already does zoom, rotate and
+                                    // sharing properly. Videos keep the in-app player.
+                                    val isPhotoOrGallery = item.mediaType == MediaType.IMAGE ||
+                                        item.mediaType == MediaType.GALLERY
+                                    if (isPhotoOrGallery) {
+                                        // Fall back to revealing the containing folder
+                                        // if no app claims the file.
+                                        if (!downloadManager.openDownloadedFile(item)) {
+                                            downloadManager.openDownloadFolder(item)
+                                        }
+                                    } else {
+                                        homeViewModel.openMediaPreview(item)
+                                    }
+                                },
                                 onCopyLink = { getPlatformActions().setClipboardText(item.url) },
                                 onOpenFolder = { downloadManager.openDownloadFolder(item) }
                             )

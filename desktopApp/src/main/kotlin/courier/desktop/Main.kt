@@ -75,9 +75,10 @@ fun main() {
         ) {
             val isMaximized = windowState.placement == WindowPlacement.Maximized
 
-            // Setup smooth edge resizing on undecorated transparent window
+            // Setup smooth edge resizing on undecorated transparent window and apply native window effects
             DisposableEffect(window) {
                 window.minimumSize = Dimension(600, 660)
+                NativeWindowEffects.applyWindowEffects(window)
 
                 val resizeBorder = 8
                 var resizeDirection = 0

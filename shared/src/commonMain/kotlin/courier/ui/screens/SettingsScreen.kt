@@ -437,7 +437,23 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    for ((profile, label, detail) in OUTPUT_PROFILE_OPTIONS) {
+                    val isAndroidPlatform = remember { getPlatformActions().isAndroid() }
+                    val visibleProfiles = remember(isAndroidPlatform) {
+                        if (isAndroidPlatform) {
+                            OUTPUT_PROFILE_OPTIONS.filter { it.first != OutputProfile.EDITING_TRANSCODE }
+                        } else {
+                            OUTPUT_PROFILE_OPTIONS
+                        }
+                    }
+                    val visibleCodecs = remember(isAndroidPlatform) {
+                        if (isAndroidPlatform) {
+                            TRANSCODE_CODEC_OPTIONS.filter { it.first == TranscodeCodec.H264 }
+                        } else {
+                            TRANSCODE_CODEC_OPTIONS
+                        }
+                    }
+
+                    for ((profile, label, detail) in visibleProfiles) {
                         val isSelected = settings.outputProfile == profile
                         Row(
                             modifier = Modifier
@@ -480,7 +496,7 @@ fun SettingsScreen(
                         }
                     }
 
-                    if (settings.outputProfile == OutputProfile.EDITING_TRANSCODE) {
+                    if (settings.outputProfile == OutputProfile.EDITING_TRANSCODE && !isAndroidPlatform) {
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "Convert to",
@@ -489,7 +505,7 @@ fun SettingsScreen(
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(start = 2.dp)
                         )
-                        for ((codec, codecLabel) in TRANSCODE_CODEC_OPTIONS) {
+                        for ((codec, codecLabel) in visibleCodecs) {
                             val isCodecSelected = settings.transcodeCodec == codec
                             Row(
                                 modifier = Modifier

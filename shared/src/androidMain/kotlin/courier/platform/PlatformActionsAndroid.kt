@@ -133,6 +133,8 @@ class PlatformActionsAndroid : PlatformActions {
     override fun getAppStorageDirectory(): String {
         return context.filesDir.absolutePath
     }
+
+    override fun isAndroid(): Boolean = true
 }
 
 actual fun getPlatformActions(): PlatformActions = PlatformActionsAndroid()

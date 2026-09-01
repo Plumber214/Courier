@@ -140,6 +140,9 @@ class DownloadEngineAndroid : DownloadEngine {
                 r.addOption("--no-check-certificates")
                 r.addOption("--add-header", "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36")
                 r.addOption("--extractor-args", "youtube:player_client=android,web;player_skip=configs,webpage")
+                // Note: --concurrent-fragments is omitted on Android (unlike desktop)
+                // to avoid socket exhaustion, high memory usage during chunk assembly,
+                // and battery/thermal throttling on mobile chipsets.
                 return r
             }
 

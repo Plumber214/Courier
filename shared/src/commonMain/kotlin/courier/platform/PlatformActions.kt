@@ -18,6 +18,7 @@ interface PlatformActions {
      * describes what is actually running.
      */
     fun getBuildTimestamp(): String?
+    fun isAndroid(): Boolean = false
 }
 
 expect fun getPlatformActions(): PlatformActions

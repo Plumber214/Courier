@@ -11,7 +11,9 @@ import androidx.compose.ui.unit.dp
 
 // Base Backdrops
 val BgDark = Color(0xFF090A10)
-val GlassBackground = Color(0xB30B0D18) // 70% opacity balanced glass for wallpaper see-through
+val GlassBackground = Color(0xE60B0D18) // 90% opacity (0xE6) default frosted glass
+val GlassBackgroundHazy = Color(0xF20B0D18) // 95% opacity (0xF2) solid / hazy glass
+val GlassBackgroundSheer = Color(0xCC0B0D18) // 80% opacity (0xCC) sheer glass
 val GlassBackgroundDeep = Color(0xD9090A10) // 85% opacity for dialog scrims
 
 // Elevated Glass Surfaces (86% - 90% opacity for guaranteed 7:1+ contrast)

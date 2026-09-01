@@ -193,12 +193,20 @@ fun main() {
 
             val windowCornerRadius = if (isMaximized) 0.dp else 18.dp
 
-            // Clean, full-bleed Glass Window with crisp glowing perimeter border
+            // Clean, full-bleed Glass Window with crisp glowing perimeter border and layered depth
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(RoundedCornerShape(windowCornerRadius))
-                    .background(GlassBackground)
+                    .background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            colors = listOf(
+                                GlassBackground,
+                                Color(0xEE0E1122),
+                                GlassBackground
+                            )
+                        )
+                    )
                     .border(
                         width = 1.5.dp,
                         brush = GlassBorderGradient,

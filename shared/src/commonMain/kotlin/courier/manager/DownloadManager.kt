@@ -54,8 +54,7 @@ class DownloadManager(
     val settings = settingsRepository.settings
 
     private val activeJobs = mutableMapOf<String, Job>()
-    private val queueMutex = Mutex()
-    private val jobsMutex = Mutex()
+    private val stateMutex = Mutex()
     private val lastMetricUpdateTimes = mutableMapOf<String, Long>()
 
     private val _isProcessingQueue = MutableStateFlow(false)
@@ -138,13 +137,17 @@ class DownloadManager(
 
     fun cancelDownload(id: String) {
         scope.launch {
-            jobsMutex.withLock {
-                activeJobs[id]?.cancel()
-                activeJobs.remove(id)
-                lastMetricUpdateTimes.remove(id)
+            val jobToCancel = stateMutex.withLock {
+                val job = activeJobs.remove(id)
+                synchronized(lastMetricUpdateTimes) {
+                    lastMetricUpdateTimes.remove(id)
+                }
+                job
             }
-            repository.clearProgress(id)
+            jobToCancel?.cancel()
             engine.cancelDownload(id)
+            jobToCancel?.join()
+            repository.clearProgress(id)
 
             val item = repository.downloads.value.find { it.id == id }
             if (item != null && !item.isFinished) {
@@ -161,13 +164,23 @@ class DownloadManager(
                 .filter { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.QUEUED || it.status == DownloadStatus.MERGING }
                 .map { it.id }
 
-            jobsMutex.withLock {
-                for ((id, job) in activeJobs) {
-                    job.cancel()
-                    engine.cancelDownload(id)
-                }
+            val jobsToCancel = stateMutex.withLock {
+                val jobs = activeJobs.values.toList()
                 activeJobs.clear()
-                lastMetricUpdateTimes.clear()
+                synchronized(lastMetricUpdateTimes) {
+                    lastMetricUpdateTimes.clear()
+                }
+                jobs
+            }
+
+            for (job in jobsToCancel) {
+                job.cancel()
+            }
+            for (id in activeOrQueuedIds) {
+                engine.cancelDownload(id)
+            }
+            for (job in jobsToCancel) {
+                job.join()
             }
 
             for (id in activeOrQueuedIds) {
@@ -196,21 +209,35 @@ class DownloadManager(
     }
 
     fun removeDownload(id: String, deleteDiskFile: Boolean = true) {
-        cancelDownload(id)
-        val item = repository.downloads.value.find { it.id == id }
-        if (deleteDiskFile && item != null) {
-            val pathsToDelete = (item.outputPaths + listOfNotNull(item.outputPath)).distinct()
-            for (path in pathsToDelete) {
-                if (path.isNotBlank()) {
-                    try {
-                        getPlatformActions().deleteFile(path)
-                    } catch (e: Exception) {
-                        println("Error deleting physical file $path: ${e.message}")
+        scope.launch {
+            val jobToCancel = stateMutex.withLock {
+                val job = activeJobs.remove(id)
+                synchronized(lastMetricUpdateTimes) {
+                    lastMetricUpdateTimes.remove(id)
+                }
+                job
+            }
+            jobToCancel?.cancel()
+            engine.cancelDownload(id)
+            jobToCancel?.join()
+            repository.clearProgress(id)
+
+            val item = repository.downloads.value.find { it.id == id }
+            if (deleteDiskFile && item != null) {
+                val pathsToDelete = (item.outputPaths + listOfNotNull(item.outputPath)).distinct()
+                for (path in pathsToDelete) {
+                    if (path.isNotBlank()) {
+                        try {
+                            getPlatformActions().deleteFile(path)
+                        } catch (e: Exception) {
+                            println("Error deleting physical file $path: ${e.message}")
+                        }
                     }
                 }
             }
+            repository.remove(id)
+            triggerQueueProcessing()
         }
-        repository.remove(id)
     }
 
     fun clearCompleted() {
@@ -229,9 +256,9 @@ class DownloadManager(
 
     private fun triggerQueueProcessing() {
         scope.launch {
-            queueMutex.withLock {
+            stateMutex.withLock {
                 val maxConcurrent = settings.value.maxConcurrentDownloads.coerceIn(1, 5)
-                val currentActiveCount = jobsMutex.withLock { activeJobs.size }
+                val currentActiveCount = activeJobs.size
 
                 if (currentActiveCount >= maxConcurrent) return@withLock
 
@@ -241,113 +268,112 @@ class DownloadManager(
                     .take(slotsAvailable)
 
                 for (queuedItem in queuedItems) {
-                    startDownloadJob(queuedItem)
+                    startDownloadJobLocked(queuedItem)
                 }
             }
         }
     }
 
-    private fun startDownloadJob(item: DownloadItem) {
+    private fun startDownloadJobLocked(item: DownloadItem) {
         val job = scope.launch {
-            val outputDir = item.destinationDir ?: settings.value.downloadDirectory.ifBlank {
-                getPlatformActions().getDefaultDownloadDirectory()
-            }
-            val formatId = item.formatId
-            val cookieBrowser = settings.value.selectedCookieBrowser.let {
-                if (it == "None" || it.isBlank()) null else it.lowercase()
-            }
+            try {
+                val outputDir = item.destinationDir ?: settings.value.downloadDirectory.ifBlank {
+                    getPlatformActions().getDefaultDownloadDirectory()
+                }
+                val formatId = item.formatId
+                val cookieBrowser = settings.value.selectedCookieBrowser.let {
+                    if (it == "None" || it.isBlank()) null else it.lowercase()
+                }
 
-            repository.addOrUpdate(
-                item.copy(
-                    status = DownloadStatus.DOWNLOADING,
-                    errorMessage = null
+                repository.addOrUpdate(
+                    item.copy(
+                        status = DownloadStatus.DOWNLOADING,
+                        errorMessage = null
+                    )
                 )
-            )
 
-            val result = engine.downloadVideo(
-                item = item,
-                formatId = formatId,
-                outputDir = outputDir,
-                cookieBrowser = cookieBrowser,
-                onProgress = { progress, speed, eta, downloaded, total ->
-                    val now = currentEpochMs()
-                    var shouldUpdateMetrics = false
-                    scope.launch {
-                        jobsMutex.withLock {
+                val result = engine.downloadVideo(
+                    item = item,
+                    formatId = formatId,
+                    outputDir = outputDir,
+                    cookieBrowser = cookieBrowser,
+                    onProgress = { progress, speed, eta, downloaded, total ->
+                        val now = currentEpochMs()
+                        val shouldUpdateMetrics: Boolean
+                        synchronized(lastMetricUpdateTimes) {
                             val lastUpdate = lastMetricUpdateTimes[item.id] ?: 0L
-                            if (now - lastUpdate >= 600L || progress >= 99f) {
+                            if (now - lastUpdate >= 600L || progress >= 99f || (speed != null && lastUpdate == 0L)) {
                                 lastMetricUpdateTimes[item.id] = now
                                 shouldUpdateMetrics = true
+                            } else {
+                                shouldUpdateMetrics = false
                             }
                         }
-                    }
 
-                    if (shouldUpdateMetrics) {
-                        repository.updateProgress(
-                            id = item.id,
-                            progress = progress,
-                            speed = speed,
-                            eta = eta,
-                            downloaded = downloaded,
-                            total = total
-                        )
-                    } else {
-                        repository.updateProgress(
-                            id = item.id,
-                            progress = progress,
-                            speed = null,
-                            eta = null,
-                            downloaded = null,
-                            total = null
-                        )
+                        if (shouldUpdateMetrics) {
+                            repository.updateProgress(
+                                id = item.id,
+                                progress = progress,
+                                speed = speed,
+                                eta = eta,
+                                downloaded = downloaded,
+                                total = total
+                            )
+                        } else {
+                            repository.updateProgress(
+                                id = item.id,
+                                progress = progress,
+                                speed = null,
+                                eta = null,
+                                downloaded = null,
+                                total = null
+                            )
+                        }
+                    }
+                )
+
+                repository.clearProgress(item.id)
+
+                result.fold(
+                    onSuccess = { filePaths ->
+                        val primaryPath = filePaths.firstOrNull()
+                        val updated = repository.downloads.value.find { it.id == item.id }
+                        if (updated != null) {
+                            repository.addOrUpdate(
+                                updated.copy(
+                                    status = DownloadStatus.COMPLETED,
+                                    progressPercent = 100f,
+                                    outputPath = primaryPath,
+                                    outputPaths = filePaths,
+                                    speedFormatted = null,
+                                    etaFormatted = null
+                                )
+                            )
+                        }
+                    },
+                    onFailure = { error ->
+                        val updated = repository.downloads.value.find { it.id == item.id }
+                        if (updated != null && updated.status != DownloadStatus.CANCELLED) {
+                            repository.addOrUpdate(
+                                updated.copy(
+                                    status = DownloadStatus.FAILED,
+                                    errorMessage = error.message ?: "Download failed"
+                                )
+                            )
+                        }
+                    }
+                )
+            } finally {
+                stateMutex.withLock {
+                    activeJobs.remove(item.id)
+                    synchronized(lastMetricUpdateTimes) {
+                        lastMetricUpdateTimes.remove(item.id)
                     }
                 }
-            )
-
-            repository.clearProgress(item.id)
-
-            result.fold(
-                onSuccess = { filePaths ->
-                    val primaryPath = filePaths.firstOrNull()
-                    val updated = repository.downloads.value.find { it.id == item.id }
-                    if (updated != null) {
-                        repository.addOrUpdate(
-                            updated.copy(
-                                status = DownloadStatus.COMPLETED,
-                                progressPercent = 100f,
-                                outputPath = primaryPath,
-                                outputPaths = filePaths,
-                                speedFormatted = null,
-                                etaFormatted = null
-                            )
-                        )
-                    }
-                },
-                onFailure = { error ->
-                    val updated = repository.downloads.value.find { it.id == item.id }
-                    if (updated != null && updated.status != DownloadStatus.CANCELLED) {
-                        repository.addOrUpdate(
-                            updated.copy(
-                                status = DownloadStatus.FAILED,
-                                errorMessage = error.message ?: "Download failed"
-                            )
-                        )
-                    }
-                }
-            )
-
-            jobsMutex.withLock {
-                activeJobs.remove(item.id)
-                lastMetricUpdateTimes.remove(item.id)
-            }
-            triggerQueueProcessing()
-        }
-
-        scope.launch {
-            jobsMutex.withLock {
-                activeJobs[item.id] = job
+                triggerQueueProcessing()
             }
         }
+        activeJobs[item.id] = job
     }
 
     private fun randomId(): String {

@@ -1,4 +1,4 @@
-﻿package courier.data
+package courier.data
 
 import courier.model.DownloadItem
 import courier.platform.readTextFile
@@ -82,12 +82,13 @@ class DownloadRepository {
         total: String?
     ) {
         _progressMap.update { current ->
+            val prev = current[id]
             current + (id to DownloadProgress(
                 progressPercent = progress,
-                speedFormatted = speed,
-                etaFormatted = eta,
-                downloadedSizeFormatted = downloaded,
-                totalSizeFormatted = total
+                speedFormatted = speed ?: prev?.speedFormatted,
+                etaFormatted = eta ?: prev?.etaFormatted,
+                downloadedSizeFormatted = downloaded ?: prev?.downloadedSizeFormatted,
+                totalSizeFormatted = total ?: prev?.totalSizeFormatted
             ))
         }
     }

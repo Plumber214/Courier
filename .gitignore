@@ -21,6 +21,11 @@ local.properties
 *.aab
 *.dex
 
+# Packaged release artifacts (regenerate with: gradlew publishRelease)
+/release/*.jar
+/release/*.apk
+/*.jar
+
 # Embedded engine binaries
 desktopApp/binaries/
 androidApp/src/main/jniLibs/

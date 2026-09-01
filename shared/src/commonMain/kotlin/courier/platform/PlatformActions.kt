@@ -11,6 +11,9 @@ interface PlatformActions {
     fun getAppStorageDirectory(): String
     fun getStandardMediaRoots(): List<String> = emptyList()
     suspend fun probeDirectoryWritable(path: String): Result<Unit> = Result.success(Unit)
+    fun onDownloadStarted(title: String) {}
+    fun onDownloadProgress(title: String, progress: Float, speed: String?, eta: String?) {}
+    fun onDownloadStopped() {}
 
     /**
      * When the artifact currently executing was built, as "yyyy-MM-dd HH:mm",

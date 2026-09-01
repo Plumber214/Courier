@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.media.MediaScannerConnection
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
 import android.util.Log
 import androidx.core.content.FileProvider
@@ -161,6 +162,51 @@ class PlatformActionsAndroid : PlatformActions {
         } catch (e: Exception) {
             Log.w("Courier", "Could not read build timestamp", e)
             null
+        }
+    }
+
+    override fun onDownloadStarted(title: String) {
+        try {
+            val intent = Intent().apply {
+                setClassName(context.packageName, "courier.android.DownloadService")
+                action = "courier.action.START_DOWNLOAD_SERVICE"
+                putExtra("extra_title", title)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        } catch (e: Exception) {
+            Log.w("Courier", "Failed to start DownloadService", e)
+        }
+    }
+
+    override fun onDownloadProgress(title: String, progress: Float, speed: String?, eta: String?) {
+        try {
+            val intent = Intent().apply {
+                setClassName(context.packageName, "courier.android.DownloadService")
+                action = "courier.action.UPDATE_DOWNLOAD_PROGRESS"
+                putExtra("extra_title", title)
+                putExtra("extra_progress", progress.toInt())
+                putExtra("extra_speed", speed)
+                putExtra("extra_eta", eta)
+            }
+            context.startService(intent)
+        } catch (e: Exception) {
+            Log.w("Courier", "Failed to update DownloadService progress", e)
+        }
+    }
+
+    override fun onDownloadStopped() {
+        try {
+            val intent = Intent().apply {
+                setClassName(context.packageName, "courier.android.DownloadService")
+                action = "courier.action.STOP_DOWNLOAD_SERVICE"
+            }
+            context.startService(intent)
+        } catch (e: Exception) {
+            Log.w("Courier", "Failed to stop DownloadService", e)
         }
     }
 

@@ -213,6 +213,7 @@ class DownloadEngineAndroid : DownloadEngine {
                 requests.add(newRequest().apply { addVideoArgs() })
             }
 
+            courier.platform.getPlatformActions().onDownloadStarted(item.title)
             val writtenFiles = mutableListOf<String>()
             var lastError: Exception? = null
 
@@ -234,15 +235,20 @@ class DownloadEngineAndroid : DownloadEngine {
                                 (item.galleryCount ?: 0) > 0 -> item.galleryCount ?: 1
                                 else -> 1
                             }
-                            onProgress(
-                                scaled((writtenFiles.size * 100f / expected).coerceIn(0f, 100f)),
-                                null, null, null, null
-                            )
+                            val p = scaled((writtenFiles.size * 100f / expected).coerceIn(0f, 100f))
+                            courier.platform.getPlatformActions().onDownloadProgress(item.title, p, null, null)
+                            onProgress(p, null, null, null, null)
                         } else if (trimmed.contains("Downloading video thumbnail")) {
-                            if (writtenFiles.isEmpty()) onProgress(scaled(50f), null, null, null, null)
+                            if (writtenFiles.isEmpty()) {
+                                val p = scaled(50f)
+                                courier.platform.getPlatformActions().onDownloadProgress(item.title, p, null, null)
+                                onProgress(p, null, null, null, null)
+                            }
                         } else {
                             val etaStr = if (etaInSeconds > 0) "${etaInSeconds}s" else null
-                            onProgress(scaled(progress), null, etaStr, null, null)
+                            val p = scaled(progress)
+                            courier.platform.getPlatformActions().onDownloadProgress(item.title, p, null, etaStr)
+                            onProgress(p, null, etaStr, null, null)
                         }
                     }
                 } catch (e: Exception) {
@@ -282,6 +288,8 @@ class DownloadEngineAndroid : DownloadEngine {
         } catch (e: Exception) {
             Log.e("Courier", "downloadVideo failed", e)
             Result.failure(e)
+        } finally {
+            courier.platform.getPlatformActions().onDownloadStopped()
         }
     }
 

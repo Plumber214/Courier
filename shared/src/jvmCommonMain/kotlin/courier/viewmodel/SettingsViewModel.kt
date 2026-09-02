@@ -120,6 +120,18 @@ class SettingsViewModel(
         settingsRepository.updateSettings(settings.value.copy(transcodeCodec = codec))
     }
 
+    fun updateAutoCheckAppUpdates(enabled: Boolean) {
+        settingsRepository.updateSettings(settings.value.copy(autoCheckAppUpdates = enabled))
+    }
+
+    fun checkAppUpdates() {
+        courier.di.AppModule.appUpdateManager.checkForUpdates(manual = true)
+    }
+
+    fun restartAndApplyAppUpdate() {
+        courier.di.AppModule.appUpdateManager.applyUpdateAndRestart()
+    }
+
     init {
         val now = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
         val sevenDaysMs = 7L * 24 * 60 * 60 * 1000L

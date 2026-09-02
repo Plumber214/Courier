@@ -123,11 +123,17 @@ val publishDesktopLatest by tasks.registering(Copy::class) {
     rename { "Courier-Desktop-latest.jar" }
 }
 
+val publishWindowsExecutable by tasks.registering(Copy::class) {
+    dependsOn("createDistributable")
+    from(layout.buildDirectory.dir("compose/binaries/main/app/Courier"))
+    into(releaseDir.dir("Courier-Windows"))
+}
+
 tasks.register("publishDesktopRelease") {
     group = "courier"
     description = "Builds the desktop uber jar and publishes it to release/ as both " +
-        "Courier-Desktop-v$courierVersion.jar and Courier-Desktop-latest.jar."
-    dependsOn(publishDesktopVersioned, publishDesktopLatest)
+        "Courier-Desktop-v$courierVersion.jar and Courier-Desktop-latest.jar, plus portable Courier-Windows."
+    dependsOn(publishDesktopVersioned, publishDesktopLatest, publishWindowsExecutable)
 
     val outFile = releaseDir.file("Courier-Desktop-latest.jar").asFile
     doLast {

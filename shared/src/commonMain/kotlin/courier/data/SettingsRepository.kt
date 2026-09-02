@@ -40,7 +40,12 @@ class SettingsRepository {
             val content = json.encodeToString(AppSettings.serializer(), newSettings)
             saveTextFile(settingsFileName, content)
         } catch (e: Exception) {
-            println("Failed to save settings: ")
+            println("Failed to save settings: ${e.message}")
         }
+    }
+
+    fun updateSettings(transform: (AppSettings) -> AppSettings) {
+        val updated = transform(_settings.value)
+        updateSettings(updated)
     }
 }

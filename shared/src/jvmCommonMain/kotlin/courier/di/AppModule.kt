@@ -48,6 +48,16 @@ object AppModule {
         }
     }
 
+    val appUpdateManager: courier.update.AppUpdateManager by lazy {
+        courier.update.AppUpdateManager(
+            settingsRepository = settingsRepository
+        ).apply {
+            if (!courier.platform.getPlatformActions().isAndroid()) {
+                checkForUpdates(manual = false)
+            }
+        }
+    }
+
     fun provideHomeViewModel(): HomeViewModel = HomeViewModel(
         downloadManager = downloadManager,
         engine = downloadEngine

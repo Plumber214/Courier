@@ -48,5 +48,7 @@ data class AppSettings(
     // is not a successful download for this app's purpose.
     val outputProfile: OutputProfile = OutputProfile.EDITING_NATIVE,
     val transcodeCodec: TranscodeCodec = TranscodeCodec.H264,
-    val lastEngineUpdateCheckEpochMs: Long = 0L
+    val lastEngineUpdateCheckEpochMs: Long = 0L,
+    val autoCheckAppUpdates: Boolean = true,
+    val lastAppUpdateCheckEpochMs: Long = 0L
 )

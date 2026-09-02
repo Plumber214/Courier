@@ -46,8 +46,9 @@ Paste a link from **YouTube**, **TikTok**, **Instagram**, or **Facebook** to dow
 ## Quick Launch (Binaries Ready in `release/`)
 
 ### Windows Desktop (Windows 10/11 x64):
-1. Double-click `Launch-Courier-Desktop.bat` in the project root folder.
-2. Alternatively, run:
+1. Launch `release/Courier-Windows/Courier.exe` (pin to your Taskbar for instant access).
+2. Or double-click `Launch-Courier-Desktop.bat` in the project root folder.
+3. Alternatively, run:
    ```cmd
    java -jar release/Courier-Desktop-latest.jar
    ```

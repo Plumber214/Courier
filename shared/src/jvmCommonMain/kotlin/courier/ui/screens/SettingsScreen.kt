@@ -47,6 +47,8 @@ import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -603,6 +605,214 @@ fun SettingsScreen(
                                 )
                             }
                         }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Section: App Updates
+            SettingsSectionHeader(title = "App Updates", icon = Icons.Default.SystemUpdate)
+
+            SettingsCard {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // Row 1: Automatic Updates Switch
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Automatic Update Checks",
+                                color = TextPrimary,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Silently check for new versions on launch and download in background",
+                                color = TextMuted,
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Switch(
+                            checked = settings.autoCheckAppUpdates,
+                            onCheckedChange = { viewModel.updateAutoCheckAppUpdates(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = AccentCyan,
+                                uncheckedThumbColor = TextMuted,
+                                uncheckedTrackColor = SurfaceVariantDark
+                            )
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(CardBorderDark)
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Row 2: Manual Check & State
+                    val updateManager = courier.di.AppModule.appUpdateManager
+                    val appUpdateState by updateManager.updateState.collectAsState()
+                    val isChecking = appUpdateState is courier.update.AppUpdateState.Checking
+                    val isDownloading = appUpdateState is courier.update.AppUpdateState.Downloading
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Courier Version",
+                                color = TextPrimary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            val lastAppCheckedText = if (settings.lastAppUpdateCheckEpochMs > 0) {
+                                val instant = kotlinx.datetime.Instant.fromEpochMilliseconds(settings.lastAppUpdateCheckEpochMs)
+                                val local = instant.toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault())
+                                "Checked ${local.year}-${local.monthNumber.toString().padStart(2, '0')}-${local.dayOfMonth.toString().padStart(2, '0')} ${local.hour.toString().padStart(2, '0')}:${local.minute.toString().padStart(2, '0')}"
+                            } else {
+                                "Checked: Never"
+                            }
+                            Text(
+                                text = "v${courier.util.AppVersion.VERSION_NAME} • $lastAppCheckedText",
+                                color = AccentCyan,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+
+                        Button(
+                            onClick = { viewModel.checkAppUpdates() },
+                            enabled = !isChecking && !isDownloading,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = PrimaryIndigo,
+                                contentColor = Color.White
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, AccentCyan.copy(alpha = 0.5f))
+                        ) {
+                            if (isChecking) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Check Now", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    // Live Status Feedback
+                    when (val st = appUpdateState) {
+                        is courier.update.AppUpdateState.Checking -> {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "Connecting to GitHub Releases...",
+                                color = AccentCyan,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        is courier.update.AppUpdateState.UpToDate -> {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "✓ Courier is up to date (v${st.version})",
+                                color = AccentCyan,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        is courier.update.AppUpdateState.Downloading -> {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Downloading v${st.latestVersion} (${st.progressPercent.toInt()}% • ${st.speedFormatted})",
+                                color = AccentCyan,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            androidx.compose.material3.LinearProgressIndicator(
+                                progress = { st.progressPercent / 100f },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(4.dp),
+                                color = AccentCyan,
+                                trackColor = Color.White.copy(alpha = 0.1f)
+                            )
+                        }
+                        is courier.update.AppUpdateState.UpdateReady -> {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(PrimaryIndigo.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
+                                    .border(1.dp, AccentCyan, RoundedCornerShape(10.dp))
+                                    .padding(12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "🚀 Version ${st.latestVersion} Ready",
+                                            color = Color.White,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = "Restart Courier to apply the new version",
+                                            color = TextSecondary,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+
+                                    Button(
+                                        onClick = { viewModel.restartAndApplyAppUpdate() },
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = AccentCyan,
+                                            contentColor = SurfaceDark
+                                        )
+                                    ) {
+                                        Text("Restart & Apply", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                        is courier.update.AppUpdateState.Error -> {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "Update error: ${st.message}",
+                                color = Color(0xFFFF6B6B),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        else -> {}
                     }
                 }
             }

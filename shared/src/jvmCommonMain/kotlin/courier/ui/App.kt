@@ -4,9 +4,11 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -185,37 +187,28 @@ private fun TabContent(
     devicesViewModel: courier.viewmodel.DevicesViewModel,
     onSwitchTab: (AppTab) -> Unit
 ) {
-    // Preserve composition state per tab so scrolling position survives tab switches (§2.Stage D.3)
-    Box(modifier = Modifier.fillMaxSize()) {
-        AnimatedVisibility(
-            visible = selectedTab == AppTab.DOWNLOADS,
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            HomeScreen(
-                homeViewModel = homeViewModel,
-                downloadManager = downloadManager,
-                onOpenSettings = { onSwitchTab(AppTab.SETTINGS) }
-            )
-        }
+    Column(modifier = Modifier.fillMaxSize()) {
+        courier.ui.components.UpdateReadyBanner()
 
-        AnimatedVisibility(
-            visible = selectedTab == AppTab.DEVICES,
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            DevicesScreen(viewModel = devicesViewModel)
-        }
-
-        AnimatedVisibility(
-            visible = selectedTab == AppTab.SETTINGS,
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            SettingsScreen(
-                viewModel = settingsViewModel,
-                onBackClick = { onSwitchTab(AppTab.DOWNLOADS) }
-            )
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            when (selectedTab) {
+                AppTab.DOWNLOADS -> {
+                    HomeScreen(
+                        homeViewModel = homeViewModel,
+                        downloadManager = downloadManager,
+                        onOpenSettings = { onSwitchTab(AppTab.SETTINGS) }
+                    )
+                }
+                AppTab.DEVICES -> {
+                    DevicesScreen(viewModel = devicesViewModel)
+                }
+                AppTab.SETTINGS -> {
+                    SettingsScreen(
+                        viewModel = settingsViewModel,
+                        onBackClick = { onSwitchTab(AppTab.DOWNLOADS) }
+                    )
+                }
+            }
         }
     }
 }

@@ -24,8 +24,10 @@ local.properties
 # Packaged release artifacts (regenerate with: gradlew publishRelease)
 /release/*.jar
 /release/*.apk
+/release/*.zip
 /release/Courier-Windows/
 /*.jar
+/*.zip
 
 # Embedded engine binaries
 desktopApp/binaries/

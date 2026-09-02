@@ -34,6 +34,17 @@ compose.desktop {
             packageVersion = courierVersion
             description = "Minimal Video Downloader for YouTube, TikTok, Instagram, and Facebook"
             vendor = "Courier"
+
+            modules(
+                "java.base",
+                "java.desktop",
+                "java.net.http",
+                "java.logging",
+                "java.management",
+                "java.naming",
+                "java.security.jgss",
+                "jdk.unsupported"
+            )
         }
     }
 }

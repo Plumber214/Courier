@@ -1,7 +1,6 @@
 package courier.update
 
 import courier.data.SettingsRepository
-import courier.platform.getPlatformActions
 import courier.util.AppVersion
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,11 +15,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.io.FileOutputStream
+import java.net.HttpURLConnection
 import java.net.URI
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
-import java.time.Duration
 
 sealed interface AppUpdateState {
     object Idle : AppUpdateState
@@ -62,11 +58,6 @@ class AppUpdateManager(
     private val _updateState = MutableStateFlow<AppUpdateState>(AppUpdateState.Idle)
     val updateState: StateFlow<AppUpdateState> = _updateState.asStateFlow()
 
-    private val httpClient = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofSeconds(10))
-        .followRedirects(HttpClient.Redirect.NORMAL)
-        .build()
-
     private val json = Json { ignoreUnknownKeys = true }
     private var activeJob: Job? = null
 
@@ -85,21 +76,23 @@ class AppUpdateManager(
             settingsRepository.updateSettings { it.copy(lastAppUpdateCheckEpochMs = now) }
 
             try {
-                val req = HttpRequest.newBuilder()
-                    .uri(URI.create(RELEASES_API_URL))
-                    .header("User-Agent", "Courier-Desktop/${AppVersion.VERSION_NAME}")
-                    .header("Accept", "application/vnd.github.v3+json")
-                    .timeout(Duration.ofSeconds(15))
-                    .GET()
-                    .build()
+                val url = URI.create(RELEASES_API_URL).toURL()
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 10000
+                    readTimeout = 15000
+                    setRequestProperty("User-Agent", "Courier-Desktop/${AppVersion.VERSION_NAME}")
+                    setRequestProperty("Accept", "application/vnd.github.v3+json")
+                }
 
-                val res = httpClient.send(req, HttpResponse.BodyHandlers.ofString())
-                if (res.statusCode() != 200) {
-                    _updateState.value = AppUpdateState.Error("GitHub API returned ${res.statusCode()}", now)
+                val code = conn.responseCode
+                if (code != 200) {
+                    _updateState.value = AppUpdateState.Error("GitHub API returned HTTP $code", now)
                     return@launch
                 }
 
-                val parsed = json.parseToJsonElement(res.body()).jsonObject
+                val responseBody = conn.inputStream.bufferedReader().use { it.readText() }
+                val parsed = json.parseToJsonElement(responseBody).jsonObject
                 val tagName = parsed["tag_name"]?.jsonPrimitive?.content ?: ""
                 val body = parsed["body"]?.jsonPrimitive?.content ?: ""
                 val assets = parsed["assets"]?.jsonArray ?: emptyList()
@@ -108,7 +101,6 @@ class AppUpdateManager(
                 val latestVer = SemanticVersion.parse(tagName)
 
                 if (currentVer != null && latestVer != null && latestVer > currentVer) {
-                    // Find suitable desktop asset
                     var downloadUrl = ""
                     var assetName = ""
                     var sizeBytes = 0L
@@ -134,7 +126,6 @@ class AppUpdateManager(
                             sizeBytes = sizeBytes
                         )
 
-                        // Automatically begin downloading and staging the update
                         downloadAndStageUpdate(latestVer.toString(), body, downloadUrl, assetName, sizeBytes)
                     } else {
                         _updateState.value = AppUpdateState.UpToDate(AppVersion.VERSION_NAME, now)
@@ -151,7 +142,7 @@ class AppUpdateManager(
     private suspend fun downloadAndStageUpdate(
         version: String,
         notes: String,
-        url: String,
+        downloadUrlStr: String,
         assetName: String,
         sizeBytes: Long
     ) {
@@ -161,24 +152,43 @@ class AppUpdateManager(
         val stagedFile = File(updateDir, "staged_$assetName")
 
         try {
-            val req = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .header("User-Agent", "Courier-Desktop/${AppVersion.VERSION_NAME}")
-                .GET()
-                .build()
+            var currentUrlStr = downloadUrlStr
+            var conn: HttpURLConnection
+            var redirects = 0
+            while (true) {
+                val url = URI.create(currentUrlStr).toURL()
+                conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "GET"
+                    connectTimeout = 15000
+                    readTimeout = 30000
+                    setRequestProperty("User-Agent", "Courier-Desktop/${AppVersion.VERSION_NAME}")
+                    instanceFollowRedirects = true
+                }
 
-            val res = httpClient.send(req, HttpResponse.BodyHandlers.ofInputStream())
-            if (res.statusCode() !in 200..299) {
-                _updateState.value = AppUpdateState.Error("Download failed with HTTP ${res.statusCode()}", System.currentTimeMillis())
+                val code = conn.responseCode
+                if (code == HttpURLConnection.HTTP_MOVED_TEMP || code == HttpURLConnection.HTTP_MOVED_PERM || code == HttpURLConnection.HTTP_SEE_OTHER) {
+                    val newLoc = conn.getHeaderField("Location")
+                    if (newLoc != null && redirects < 5) {
+                        currentUrlStr = newLoc
+                        redirects++
+                        continue
+                    }
+                }
+                break
+            }
+
+            val code = conn.responseCode
+            if (code !in 200..299) {
+                _updateState.value = AppUpdateState.Error("Download failed with HTTP $code", System.currentTimeMillis())
                 return
             }
 
-            val totalBytes = if (sizeBytes > 0) sizeBytes else res.headers().firstValueAsLong("Content-Length").orElse(0L)
+            val totalBytes = if (sizeBytes > 0) sizeBytes else conn.contentLengthLong.takeIf { it > 0 } ?: 0L
             var downloaded = 0L
             val startTime = System.currentTimeMillis()
             var lastUpdateEmit = 0L
 
-            res.body().use { input ->
+            conn.inputStream.use { input ->
                 FileOutputStream(stagedFile).use { output ->
                     val buffer = ByteArray(32 * 1024)
                     var bytesRead: Int
@@ -231,7 +241,6 @@ class AppUpdateManager(
             val isWindows = System.getProperty("os.name")?.lowercase()?.contains("win") == true
             val currentPid = ProcessHandle.current().pid()
 
-            // Resolve target location
             val runningJarUri = AppUpdateManager::class.java.protectionDomain?.codeSource?.location?.toURI()
             val runningJarFile = runningJarUri?.let { File(it) } ?: File("release/Courier-Desktop-latest.jar")
             val appDir = runningJarFile.parentFile ?: File(".")

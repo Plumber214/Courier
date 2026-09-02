@@ -23,6 +23,7 @@ interface PlatformActions {
      * describes what is actually running.
      */
     fun getBuildTimestamp(): String?
+    fun getDefaultDeviceName(): String = "Courier Desktop"
     fun isAndroid(): Boolean = false
 }
 

@@ -18,7 +18,7 @@ class DevicesViewModel(
     private val linkManager: DeviceLinkManager = DeviceLinkManager.getInstance(),
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Main)
 ) {
-    val myIdentity: DeviceIdentity = linkManager.myIdentity
+    val myIdentity: StateFlow<DeviceIdentity> = linkManager.myIdentity
 
     val pairedDevices: StateFlow<List<PairedDevice>> = linkManager.trustStore.pairedDevices
     val discoveredDevices: StateFlow<List<DiscoveredDevice>> = linkManager.discovery.discoveredDevices
@@ -27,6 +27,25 @@ class DevicesViewModel(
 
     private val _manualConnectStatus = MutableStateFlow<String?>(null)
     val manualConnectStatus: StateFlow<String?> = _manualConnectStatus.asStateFlow()
+
+    private val _showRenameDialog = MutableStateFlow(false)
+    val showRenameDialog: StateFlow<Boolean> = _showRenameDialog.asStateFlow()
+
+    fun openRenameDialog() {
+        _showRenameDialog.value = true
+    }
+
+    fun closeRenameDialog() {
+        _showRenameDialog.value = false
+    }
+
+    fun submitNewDeviceName(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isNotBlank()) {
+            linkManager.updateDeviceName(trimmed)
+        }
+        _showRenameDialog.value = false
+    }
 
     init {
         linkManager.start()

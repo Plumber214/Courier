@@ -28,6 +28,7 @@ object LinkConstants {
 
     // Packet Types
     const val TYPE_IDENTITY = "courier.identity"
+    const val TYPE_IDENTITY_UPDATE = "courier.identity.update"
     const val TYPE_PAIR = "courier.pair"
     const val TYPE_ACK = "courier.ack"
     const val TYPE_PING = "courier.ping"
@@ -77,7 +78,15 @@ data class DeviceIdentity(
         LinkConstants.TYPE_PING,
         LinkConstants.TYPE_PAIR
     )
-)
+) {
+    /**
+     * Creates the generic public identity for unauthenticated UDP/mDNS discovery
+     * announcements (Decision F3, CVE-2020-26164 mitigation).
+     */
+    fun toGenericPublicIdentity(): DeviceIdentity = copy(
+        deviceName = "Courier device ${deviceId.take(4)}"
+    )
+}
 
 @Serializable
 data class PairedDevice(

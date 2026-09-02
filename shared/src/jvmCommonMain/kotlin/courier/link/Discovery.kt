@@ -11,7 +11,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import java.net.DatagramPacket
@@ -26,7 +25,7 @@ import javax.jmdns.ServiceInfo
 import javax.jmdns.ServiceListener
 
 class Discovery(
-    private val myIdentity: DeviceIdentity,
+    private val identityProvider: () -> DeviceIdentity,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO)
 ) {
     private val json = Json { ignoreUnknownKeys = true }
@@ -41,6 +40,8 @@ class Discovery(
 
     // Rate limiting map: Remote IP -> Last received epoch ms
     private val udpRateLimits = ConcurrentHashMap<String, Long>()
+
+    fun getPublicIdentity(): DeviceIdentity = identityProvider().toGenericPublicIdentity()
 
     fun start() {
         startUdpListener()
@@ -99,7 +100,7 @@ class Discovery(
                         val linkPacket = json.decodeFromString<LinkPacket>(raw)
                         if (linkPacket.type == LinkConstants.TYPE_IDENTITY) {
                             val peerIdentity = json.decodeFromJsonElement(DeviceIdentity.serializer(), linkPacket.body)
-                            if (peerIdentity.deviceId != myIdentity.deviceId) {
+                            if (peerIdentity.deviceId != identityProvider().deviceId) {
                                 registerDiscoveredDevice(peerIdentity, remoteIp, peerIdentity.tcpPort)
                             }
                         }
@@ -127,7 +128,8 @@ class Discovery(
 
     private fun sendUdpBroadcast() {
         try {
-            val bodyJson = json.encodeToJsonElement(myIdentity).jsonObject
+            val publicIdentity = getPublicIdentity()
+            val bodyJson = json.encodeToJsonElement(publicIdentity).jsonObject
             val packet = LinkPacket(
                 type = LinkConstants.TYPE_IDENTITY,
                 body = bodyJson
@@ -165,14 +167,16 @@ class Discovery(
             try {
                 val localAddr = getLocalIpAddress()
                 if (localAddr != null) {
-                    val jmdnsInstance = JmDNS.create(localAddr, myIdentity.deviceName)
+                    val publicIdentity = getPublicIdentity()
+                    val genericServiceName = "Courier-${publicIdentity.deviceId.take(6)}"
+                    val jmdnsInstance = JmDNS.create(localAddr, genericServiceName)
                     jmdns = jmdnsInstance
 
-                    val props = mapOf("id" to myIdentity.deviceId, "type" to myIdentity.deviceType)
+                    val props = mapOf("id" to publicIdentity.deviceId, "type" to publicIdentity.deviceType)
                     val serviceInfo = ServiceInfo.create(
                         LinkConstants.MDNS_SERVICE_TYPE,
-                        myIdentity.deviceName,
-                        myIdentity.tcpPort,
+                        genericServiceName,
+                        publicIdentity.tcpPort,
                         0,
                         0,
                         props
@@ -185,7 +189,7 @@ class Discovery(
                         override fun serviceResolved(event: ServiceEvent) {
                             val info = event.info
                             val devId = info.getPropertyString("id") ?: return
-                            if (devId == myIdentity.deviceId) return
+                            if (devId == identityProvider().deviceId) return
 
                             val peerHost = info.inet4Addresses.firstOrNull()?.hostAddress ?: return
                             val peerIdentity = DeviceIdentity(
@@ -205,7 +209,7 @@ class Discovery(
     fun registerDiscoveredDevice(identity: DeviceIdentity, hostAddress: String, tcpPort: Int) {
         val current = _discoveredDevices.value.toMutableList()
         current.removeAll { it.identity.deviceId == identity.deviceId }
-        
+
         // Cap discovered devices table (CVE Mitigation §1.4)
         if (current.size >= LinkConstants.MAX_DISCOVERED_DEVICES) {
             current.removeAt(0)

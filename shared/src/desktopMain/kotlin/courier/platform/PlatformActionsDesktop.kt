@@ -173,6 +173,8 @@ class PlatformActionsDesktop : PlatformActions {
         }
         return baseDir.absolutePath
     }
+
+    override fun getDefaultDeviceName(): String = "Courier Desktop"
 }
 
 private val desktopPlatformActionsInstance: PlatformActions = PlatformActionsDesktop()

@@ -41,7 +41,23 @@ class CertificateStore(storageDirOverride: File? = null) {
     val certificateSha256: String
     val certificateBase64: String
 
+    private val nameFile: File
     private val keyStore: KeyStore
+
+    fun getDeviceName(): String {
+        return if (nameFile.exists() && nameFile.length() > 0) {
+            nameFile.readText(Charsets.UTF_8).trim()
+        } else {
+            getPlatformActions().getDefaultDeviceName()
+        }
+    }
+
+    fun setDeviceName(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isNotBlank()) {
+            nameFile.writeText(trimmed, Charsets.UTF_8)
+        }
+    }
 
     init {
         if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
@@ -55,6 +71,7 @@ class CertificateStore(storageDirOverride: File? = null) {
 
         val keyStoreFile = File(storageDir, KEYSTORE_FILENAME)
         val idFile = File(storageDir, IDENTITY_FILENAME)
+        nameFile = File(storageDir, NAME_FILENAME)
 
         val id = if (idFile.exists() && idFile.length() > 0) {
             idFile.readText(Charsets.UTF_8).trim()
@@ -175,6 +192,7 @@ class CertificateStore(storageDirOverride: File? = null) {
     companion object {
         private const val KEYSTORE_FILENAME = "courier_identity.p12"
         private const val IDENTITY_FILENAME = "courier_device_id.txt"
+        private const val NAME_FILENAME = "courier_device_name.txt"
         private const val KEYSTORE_PASSWORD = "courier_internal_link_key"
         private const val ALIAS = "courier_identity"
 

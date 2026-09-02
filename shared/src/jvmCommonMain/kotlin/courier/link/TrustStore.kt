@@ -78,6 +78,18 @@ class TrustStore(private val fileNameOverride: String? = null) {
         saveTrustedDevices()
     }
 
+    fun updateDeviceName(deviceId: String, newName: String) {
+        val trimmed = newName.trim()
+        if (trimmed.isBlank()) return
+        val current = _pairedDevices.value.toMutableList()
+        val index = current.indexOfFirst { it.deviceId == deviceId }
+        if (index >= 0) {
+            current[index] = current[index].copy(deviceName = trimmed)
+            _pairedDevices.value = current
+            saveTrustedDevices()
+        }
+    }
+
     fun setClipboardSync(deviceId: String, enabled: Boolean) {
         val current = _pairedDevices.value.toMutableList()
         val index = current.indexOfFirst { it.deviceId == deviceId }

@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.util.Base64
@@ -28,11 +29,18 @@ sealed class PairingSessionState {
 }
 
 class PairingManager(
-    private val myIdentity: DeviceIdentity,
+    private val identityProvider: () -> DeviceIdentity,
     private val certStore: CertificateStore,
     private val trustStore: TrustStore,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO)
 ) {
+    constructor(
+        myIdentity: DeviceIdentity,
+        certStore: CertificateStore,
+        trustStore: TrustStore,
+        scope: CoroutineScope = CoroutineScope(Dispatchers.IO)
+    ) : this({ myIdentity }, certStore, trustStore, scope)
+
     private val _pairingState = MutableStateFlow<PairingSessionState>(PairingSessionState.Idle)
     val pairingState: StateFlow<PairingSessionState> = _pairingState.asStateFlow()
 
@@ -40,24 +48,50 @@ class PairingManager(
     private var pairingTimeoutJob: Job? = null
 
     fun handleIncomingPairPacket(link: SecureLink, packet: LinkPacket) {
-        val isPairRequest = packet.body["pair"]?.jsonPrimitive?.booleanOrNull ?: false
-        if (isPairRequest) {
-            val peerCertSha256 = CertificateStore.computeSha256(link.peerCertificate.encoded)
-            val code = certStore.computeVerificationCode(peerCertSha256)
-            activePairingLink = link
+        val isPair = packet.body["pair"]?.jsonPrimitive?.booleanOrNull ?: false
+        val isAccepted = packet.body["accepted"]?.jsonPrimitive?.booleanOrNull ?: false
+        val peerFriendlyName = packet.body["friendlyName"]?.jsonPrimitive?.contentOrNull
+            ?: packet.body["deviceName"]?.jsonPrimitive?.contentOrNull
+            ?: link.peerIdentity.deviceName
 
-            val discDevice = DiscoveredDevice(
-                identity = link.peerIdentity,
-                hostAddress = "",
-                tcpPort = link.peerIdentity.tcpPort
-            )
+        if (isPair) {
+            if (isAccepted) {
+                // Outgoing request accepted by peer
+                val peerCert = link.peerCertificate
+                val peerCertSha256 = CertificateStore.computeSha256(peerCert.encoded)
+                val peerCertBase64 = Base64.getEncoder().encodeToString(peerCert.encoded)
 
-            _pairingState.value = PairingSessionState.IncomingRequest(
-                device = discDevice,
-                verificationCode = code
-            )
+                val pairedDevice = PairedDevice(
+                    deviceId = link.peerDeviceId,
+                    deviceName = peerFriendlyName,
+                    deviceType = link.peerIdentity.deviceType,
+                    certificateSha256 = peerCertSha256,
+                    certificateBase64 = peerCertBase64,
+                    pairedAtEpochMs = System.currentTimeMillis(),
+                    lastSeenEpochMs = System.currentTimeMillis()
+                )
 
-            startPairingTimeout()
+                trustStore.addOrUpdatePairedDevice(pairedDevice)
+                cancelPairing()
+            } else {
+                // Incoming pair request from peer
+                val peerCertSha256 = CertificateStore.computeSha256(link.peerCertificate.encoded)
+                val code = certStore.computeVerificationCode(peerCertSha256)
+                activePairingLink = link
+
+                val discDevice = DiscoveredDevice(
+                    identity = link.peerIdentity.copy(deviceName = peerFriendlyName),
+                    hostAddress = "",
+                    tcpPort = link.peerIdentity.tcpPort
+                )
+
+                _pairingState.value = PairingSessionState.IncomingRequest(
+                    device = discDevice,
+                    verificationCode = code
+                )
+
+                startPairingTimeout()
+            }
         } else {
             // Peer rejected or unpaired
             if (trustStore.isPaired(link.peerDeviceId)) {
@@ -77,12 +111,13 @@ class PairingManager(
             verificationCode = code
         )
 
-        // Send courier.pair request
+        // Send courier.pair request with friendly name over secure TLS (Decision F3)
         link.sendPacket(
             LinkPacket(
                 type = LinkConstants.TYPE_PAIR,
                 body = buildJsonObject {
                     put("pair", true)
+                    put("friendlyName", identityProvider().deviceName)
                     put("timestamp", System.currentTimeMillis())
                 }
             )
@@ -97,9 +132,12 @@ class PairingManager(
         val peerCertSha256 = CertificateStore.computeSha256(peerCert.encoded)
         val peerCertBase64 = Base64.getEncoder().encodeToString(peerCert.encoded)
 
+        val peerName = (_pairingState.value as? PairingSessionState.IncomingRequest)?.device?.identity?.deviceName
+            ?: link.peerIdentity.deviceName
+
         val pairedDevice = PairedDevice(
             deviceId = link.peerDeviceId,
-            deviceName = link.peerIdentity.deviceName,
+            deviceName = peerName,
             deviceType = link.peerIdentity.deviceType,
             certificateSha256 = peerCertSha256,
             certificateBase64 = peerCertBase64,
@@ -109,13 +147,14 @@ class PairingManager(
 
         trustStore.addOrUpdatePairedDevice(pairedDevice)
 
-        // Confirm acceptance back to peer
+        // Confirm acceptance back to peer with friendly name over secure TLS (Decision F3)
         link.sendPacket(
             LinkPacket(
                 type = LinkConstants.TYPE_PAIR,
                 body = buildJsonObject {
                     put("pair", true)
                     put("accepted", true)
+                    put("friendlyName", identityProvider().deviceName)
                     put("timestamp", System.currentTimeMillis())
                 }
             )

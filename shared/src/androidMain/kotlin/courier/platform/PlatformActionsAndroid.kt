@@ -214,6 +214,11 @@ class PlatformActionsAndroid : PlatformActions {
         return context.filesDir.absolutePath
     }
 
+    override fun getDefaultDeviceName(): String {
+        val model = Build.MODEL
+        return if (!model.isNullOrBlank()) model else "Courier on Android"
+    }
+
     override fun isAndroid(): Boolean = true
 }
 

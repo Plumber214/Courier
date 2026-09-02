@@ -24,12 +24,20 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 class LinkServer(
-    private val myIdentity: DeviceIdentity,
+    private val identityProvider: () -> DeviceIdentity,
     private val certStore: CertificateStore,
     private val trustStore: TrustStore,
     private val onLinkEstablished: (SecureLink) -> Unit,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO)
 ) {
+    constructor(
+        myIdentity: DeviceIdentity,
+        certStore: CertificateStore,
+        trustStore: TrustStore,
+        onLinkEstablished: (SecureLink) -> Unit,
+        scope: CoroutineScope = CoroutineScope(Dispatchers.IO)
+    ) : this({ myIdentity }, certStore, trustStore, onLinkEstablished, scope)
+
     private val json = Json { ignoreUnknownKeys = true }
     private var serverSocket: ServerSocket? = null
     private var serverJob: Job? = null
@@ -112,10 +120,10 @@ class LinkServer(
         val writer = BufferedWriter(OutputStreamWriter(rawSocket.outputStream, Charsets.UTF_8))
 
         // 1. Cleartext Identity Exchange
-        // Send our identity
+        // Send our generic public identity (Decision F3, CVE-2020-26164 mitigation)
         val myIdentityPacket = LinkPacket(
             type = LinkConstants.TYPE_IDENTITY,
-            body = json.encodeToJsonElement(myIdentity).jsonObject
+            body = json.encodeToJsonElement(identityProvider().toGenericPublicIdentity()).jsonObject
         )
         writer.write(json.encodeToString(myIdentityPacket) + "\n")
         writer.flush()
@@ -182,10 +190,10 @@ class LinkServer(
             val reader = BufferedReader(InputStreamReader(rawSocket.inputStream, Charsets.UTF_8))
             val writer = BufferedWriter(OutputStreamWriter(rawSocket.outputStream, Charsets.UTF_8))
 
-            // 1. Cleartext Identity Exchange
+            // 1. Cleartext Identity Exchange (Decision F3, CVE-2020-26164 mitigation)
             val myIdentityPacket = LinkPacket(
                 type = LinkConstants.TYPE_IDENTITY,
-                body = json.encodeToJsonElement(myIdentity).jsonObject
+                body = json.encodeToJsonElement(identityProvider().toGenericPublicIdentity()).jsonObject
             )
             writer.write(json.encodeToString(myIdentityPacket) + "\n")
             writer.flush()

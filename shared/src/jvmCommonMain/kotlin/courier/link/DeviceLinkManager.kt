@@ -53,22 +53,25 @@ class DeviceLinkManager(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
-    val myIdentity: DeviceIdentity
+    private val _myIdentity: MutableStateFlow<DeviceIdentity>
+    val myIdentity: StateFlow<DeviceIdentity>
 
     init {
         val platformActions = getPlatformActions()
         val isAndroid = platformActions.isAndroid()
-        val defaultName = if (isAndroid) "Courier on Android" else "Courier on Desktop"
+        val devName = certStore.getDeviceName()
         val devType = if (isAndroid) "phone" else "desktop"
-        myIdentity = DeviceIdentity(
+        val initialIdentity = DeviceIdentity(
             deviceId = certStore.deviceId,
-            deviceName = defaultName,
+            deviceName = devName,
             deviceType = devType
         )
+        _myIdentity = MutableStateFlow(initialIdentity)
+        myIdentity = _myIdentity.asStateFlow()
     }
 
-    val pairingManager = PairingManager(myIdentity, certStore, trustStore, scope)
-    val discovery = Discovery(myIdentity, scope)
+    val pairingManager = PairingManager({ _myIdentity.value }, certStore, trustStore, scope)
+    val discovery = Discovery({ _myIdentity.value }, scope)
 
     private val activeLinks = ConcurrentHashMap<String, SecureLink>()
 
@@ -97,7 +100,7 @@ class DeviceLinkManager(
     private var reconnectJob: Job? = null
 
     val linkServer = LinkServer(
-        myIdentity = myIdentity,
+        identityProvider = { _myIdentity.value },
         certStore = certStore,
         trustStore = trustStore,
         onLinkEstablished = ::onLinkConnected,
@@ -253,6 +256,13 @@ class DeviceLinkManager(
                 _remoteDownloadStatuses.value = current
             }
 
+            LinkConstants.TYPE_IDENTITY_UPDATE -> {
+                val newName = packet.body["deviceName"]?.jsonPrimitive?.contentOrNull
+                if (!newName.isNullOrBlank()) {
+                    trustStore.updateDeviceName(peerId, newName)
+                }
+            }
+
             LinkConstants.TYPE_CLIPBOARD -> {
                 val paired = trustStore.getPairedDevice(peerId)
                 if (paired?.isClipboardSyncEnabled == true) {
@@ -262,6 +272,24 @@ class DeviceLinkManager(
                     }
                 }
             }
+        }
+    }
+
+    fun updateDeviceName(newName: String) {
+        val trimmed = newName.trim()
+        if (trimmed.isBlank()) return
+        certStore.setDeviceName(trimmed)
+        _myIdentity.value = _myIdentity.value.copy(deviceName = trimmed)
+
+        // Propagate rename to all active connected peers over TLS (Stage 1.4)
+        val renamePacket = LinkPacket(
+            type = LinkConstants.TYPE_IDENTITY_UPDATE,
+            body = buildJsonObject {
+                put("deviceName", trimmed)
+            }
+        )
+        activeLinks.values.forEach { link ->
+            link.sendPacket(renamePacket)
         }
     }
 

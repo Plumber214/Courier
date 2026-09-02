@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.PhoneAndroid
@@ -84,6 +85,8 @@ fun DevicesScreen(
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
+    val myIdentity by viewModel.myIdentity.collectAsState()
+    val showRenameDialog by viewModel.showRenameDialog.collectAsState()
     val pairedDevices by viewModel.pairedDevices.collectAsState()
     val discoveredDevices by viewModel.discoveredDevices.collectAsState()
     val connectionStates by viewModel.connectionStates.collectAsState()
@@ -136,7 +139,7 @@ fun DevicesScreen(
 
         Spacer(modifier = Modifier.height(18.dp))
 
-        // Local Device Identity Card
+        // Local Device Identity Card (Stage 1 Friendly Names)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -144,35 +147,58 @@ fun DevicesScreen(
                 .border(1.dp, CardBorderDark, RoundedCornerShape(16.dp))
                 .padding(16.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .background(PrimaryContainer, CircleShape),
-                    contentAlignment = Alignment.Center
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Icon(
-                        imageVector = if (viewModel.myIdentity.deviceType == "phone") Icons.Default.PhoneAndroid else Icons.Default.Computer,
-                        contentDescription = null,
-                        tint = PrimaryIndigo,
-                        modifier = Modifier.size(24.dp)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .background(PrimaryContainer, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (myIdentity.deviceType == "phone") Icons.Default.PhoneAndroid else Icons.Default.Computer,
+                            contentDescription = null,
+                            tint = PrimaryIndigo,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(14.dp))
+
+                    Column {
+                        Text(
+                            text = myIdentity.deviceName,
+                            color = TextPrimary,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "This Device • ID: ${myIdentity.deviceId.take(8)}... • Port ${myIdentity.tcpPort}",
+                            color = TextMuted,
+                            fontSize = 12.sp
+                        )
+                    }
                 }
 
-                Spacer(modifier = Modifier.width(14.dp))
-
-                Column {
-                    Text(
-                        text = "This Device: ${viewModel.myIdentity.deviceName}",
-                        color = TextPrimary,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "ID: ${viewModel.myIdentity.deviceId.take(8)}... • Port ${viewModel.myIdentity.tcpPort}",
-                        color = TextMuted,
-                        fontSize = 12.sp
+                IconButton(
+                    onClick = { viewModel.openRenameDialog() },
+                    modifier = Modifier
+                        .background(SurfaceVariantDark.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                        .size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Rename Device",
+                        tint = AccentCyan,
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
@@ -430,6 +456,56 @@ fun DevicesScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showManualIpDialog = false }) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            },
+            containerColor = SurfaceDark
+        )
+    }
+
+    // Rename Device Dialog (Stage 1.5, Decision F7)
+    if (showRenameDialog) {
+        var newNameText by remember(myIdentity.deviceName) { mutableStateOf(myIdentity.deviceName) }
+        AlertDialog(
+            onDismissRequest = { viewModel.closeRenameDialog() },
+            title = { Text("Rename This Device", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(
+                        "Choose a friendly name for this device. This name is shared with paired devices over encrypted TLS and is not broadcast publicly.",
+                        color = TextSecondary,
+                        fontSize = 13.sp,
+                        lineHeight = 17.sp
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    OutlinedTextField(
+                        value = newNameText,
+                        onValueChange = { newNameText = it },
+                        placeholder = { Text("e.g. Studio Laptop", color = TextMuted) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = AccentCyan,
+                            unfocusedBorderColor = CardBorderDark,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.submitNewDeviceName(newNameText)
+                    },
+                    enabled = newNameText.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryIndigo)
+                ) {
+                    Text("Save", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.closeRenameDialog() }) {
                     Text("Cancel", color = TextSecondary)
                 }
             },

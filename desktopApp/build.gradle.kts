@@ -85,12 +85,29 @@ tasks.withType<org.gradle.jvm.tasks.Jar>().configureEach {
 // from there into release/, so release/ drifted behind the build by whole
 // versions and users ran stale code. These tasks close that gap.
 //
-// The `include` below is pinned to the current version on purpose: a blanket
-// "*.jar" would pick nondeterministically from the accumulated jars.
+// Pinning `include` to the current version is not enough on its own. During
+// v1.5.0 every stage up to the version bump built while courier.versionName was
+// still 1.4.0, so those builds kept overwriting build/compose/jars'
+// *-1.4.0.jar. Publishing then copied Device Link code into
+// release/Courier-Desktop-v1.4.0.jar, and the genuine v1.4.0 artifact was gone.
+// The name matched; the contents were from a different release.
+//
+// So the directory is emptied before packaging. After that there is exactly one
+// jar in it and it is the one just built, which makes publishing a stale or
+// mislabelled artifact structurally impossible rather than merely unlikely.
 // ---------------------------------------------------------------------------
 
 val releaseDir = rootProject.layout.projectDirectory.dir("release")
 val uberJarPattern = "*-$courierVersion.jar"
+
+val cleanUberJars by tasks.registering(Delete::class) {
+    description = "Empties build/compose/jars so publishing cannot pick up an accumulated jar."
+    delete(layout.buildDirectory.dir("compose/jars"))
+}
+
+tasks.matching { it.name == "packageUberJarForCurrentOS" }.configureEach {
+    dependsOn(cleanUberJars)
+}
 
 val publishDesktopVersioned by tasks.registering(Copy::class) {
     dependsOn("packageUberJarForCurrentOS")

@@ -25,6 +25,7 @@ object LinkConstants {
     const val RECONNECT_TICK_MS = 1_000L
     const val RECONNECT_BACKOFF_MIN_MS = 2_000L
     const val RECONNECT_BACKOFF_MAX_MS = 30_000L
+    const val ASLEEP_THRESHOLD_MS = 15 * 60 * 1000L // 15 minutes (§0.7)
 
     // Packet Types
     const val TYPE_IDENTITY = "courier.identity"
@@ -36,6 +37,20 @@ object LinkConstants {
     const val TYPE_DOWNLOAD_REQUEST = "courier.download.request"
     const val TYPE_DOWNLOAD_ACCEPTED = "courier.download.accepted"
     const val TYPE_DOWNLOAD_STATUS = "courier.download.status"
+}
+
+fun formatRelativeTime(epochMs: Long): String {
+    if (epochMs <= 0L) return "Never"
+    val diffMs = System.currentTimeMillis() - epochMs
+    if (diffMs < 0) return "Just now"
+    val seconds = diffMs / 1000
+    if (seconds < 60) return "Just now"
+    val minutes = seconds / 60
+    if (minutes < 60) return "${minutes}m ago"
+    val hours = minutes / 60
+    if (hours < 24) return "${hours}h ago"
+    val days = hours / 24
+    return if (days == 1L) "Yesterday" else "${days}d ago"
 }
 
 /**

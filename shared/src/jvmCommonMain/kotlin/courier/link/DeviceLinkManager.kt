@@ -214,18 +214,22 @@ class DeviceLinkManager(
         existing?.close()
         activeLinks[peerId] = link
 
+        trustStore.updateLastSeen(peerId)
         updateConnectionState(peerId, ConnectionStatus.CONNECTED)
 
         // Listen for incoming packets
         scope.launch {
             try {
                 link.incomingPackets.collect { packet ->
+                    trustStore.updateLastSeen(peerId)
                     handleIncomingPacket(link, packet)
                 }
             } finally {
                 if (activeLinks[peerId] == link) {
                     activeLinks.remove(peerId)
-                    updateConnectionState(peerId, ConnectionStatus.DISCONNECTED)
+                    val now = System.currentTimeMillis()
+                    trustStore.updateLastSeen(peerId, now)
+                    updateConnectionState(peerId, ConnectionStatus.ASLEEP)
                     reconnectSignal.trySend(Unit)
                 }
             }
@@ -566,8 +570,12 @@ class DeviceLinkManager(
         val host = device.customIp ?: discovered.firstOrNull { it.identity.deviceId == id }?.hostAddress
         val port = discovered.firstOrNull { it.identity.deviceId == id }?.tcpPort ?: LinkConstants.DEFAULT_PORT
 
+        val now = System.currentTimeMillis()
+        val isRecentlySeen = device.lastSeenEpochMs > 0 && (now - device.lastSeenEpochMs < LinkConstants.ASLEEP_THRESHOLD_MS)
+        val fallbackStatus = if (isRecentlySeen) ConnectionStatus.ASLEEP else ConnectionStatus.DISCONNECTED
+
         if (host == null) {
-            updateConnectionState(id, ConnectionStatus.DISCONNECTED)
+            updateConnectionState(id, fallbackStatus)
             scheduleRetry(id)
             return
         }
@@ -580,7 +588,7 @@ class DeviceLinkManager(
                 onLinkConnected(link)
             }
             .onFailure {
-                updateConnectionState(id, ConnectionStatus.DISCONNECTED)
+                updateConnectionState(id, fallbackStatus)
                 scheduleRetry(id)
             }
     }

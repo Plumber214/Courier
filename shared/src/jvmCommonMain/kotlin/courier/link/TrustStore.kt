@@ -90,6 +90,16 @@ class TrustStore(private val fileNameOverride: String? = null) {
         }
     }
 
+    fun updateLastSeen(deviceId: String, epochMs: Long = System.currentTimeMillis()) {
+        val current = _pairedDevices.value.toMutableList()
+        val index = current.indexOfFirst { it.deviceId == deviceId }
+        if (index >= 0) {
+            current[index] = current[index].copy(lastSeenEpochMs = epochMs)
+            _pairedDevices.value = current
+            saveTrustedDevices()
+        }
+    }
+
     fun setClipboardSync(deviceId: String, enabled: Boolean) {
         val current = _pairedDevices.value.toMutableList()
         val index = current.indexOfFirst { it.deviceId == deviceId }

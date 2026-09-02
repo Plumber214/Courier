@@ -647,6 +647,13 @@ fun PairedDeviceCard(
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium
                             )
+                            if (status != ConnectionStatus.CONNECTED && device.lastSeenEpochMs > 0) {
+                                Text(
+                                    text = " • ${courier.link.formatRelativeTime(device.lastSeenEpochMs)}",
+                                    color = TextMuted,
+                                    fontSize = 11.sp
+                                )
+                            }
                         }
                     }
                 }

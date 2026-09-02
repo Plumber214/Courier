@@ -203,7 +203,7 @@ fun main() {
                         androidx.compose.ui.graphics.Brush.verticalGradient(
                             colors = listOf(
                                 GlassBackground,
-                                Color(0xEE0E1122),
+                                Color(0xEE161A21),
                                 GlassBackground
                             )
                         )

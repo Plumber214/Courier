@@ -8,7 +8,7 @@ enum class Platform(val displayName: String, val brandColorHex: Long) {
     TIKTOK("TikTok", 0xFF00F2FE),
     INSTAGRAM("Instagram", 0xFFE1306C),
     FACEBOOK("Facebook", 0xFF1877F2),
-    OTHER("Web Video", 0xFF6C5CE7);
+    OTHER("Web Video", 0xFF7D9BB8);
 
     companion object {
         fun fromUrl(url: String): Platform {

@@ -59,15 +59,37 @@ import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import java.awt.event.MouseMotionAdapter
 
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.window.Tray
+import androidx.compose.ui.window.rememberTrayState
+
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
     System.setProperty("skiko.renderApi", "DIRECTX_12")
 
     application {
         val windowState = rememberWindowState(width = 860.dp, height = 900.dp)
+        var isWindowVisible by remember { mutableStateOf(true) }
+        val trayState = rememberTrayState()
+        val trayIcon = rememberVectorPainter(Icons.Default.VideoLibrary)
+
+        Tray(
+            state = trayState,
+            icon = trayIcon,
+            tooltip = "Courier - Video Downloader & Device Link",
+            menu = {
+                Item("Open Courier", onClick = {
+                    isWindowVisible = true
+                    windowState.isMinimized = false
+                })
+                Separator()
+                Item("Quit Courier", onClick = ::exitApplication)
+            }
+        )
 
         Window(
-            onCloseRequest = ::exitApplication,
+            onCloseRequest = { isWindowVisible = false },
+            visible = isWindowVisible,
             title = "Courier",
             state = windowState,
             undecorated = true,
@@ -307,7 +329,7 @@ fun main() {
                                         .background(if (isCloseHovered) CloseButtonHover else Color.Transparent)
                                         .onPointerEvent(PointerEventType.Enter) { isCloseHovered = true }
                                         .onPointerEvent(PointerEventType.Exit) { isCloseHovered = false }
-                                        .clickable { exitApplication() },
+                                        .clickable { isWindowVisible = false },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(

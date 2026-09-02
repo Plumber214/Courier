@@ -178,6 +178,33 @@ fun DevicesScreen(
             }
         }
 
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // PC Background Link Notice (§1.6 / §2.Stage G.5)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(SurfaceVariantDark.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                .border(1.dp, CardBorderDark, RoundedCornerShape(12.dp))
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = AccentCyan,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "Desktop Link requires Courier to be running on your PC. After reboot, launch Courier once to connect.",
+                    color = TextSecondary,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.height(24.dp))
 
         // Paired Devices Section

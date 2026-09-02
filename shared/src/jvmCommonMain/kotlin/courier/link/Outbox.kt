@@ -16,12 +16,18 @@ data class OutboxItem(
     val packet: LinkPacket,
     val createdAtEpochMs: Long = System.currentTimeMillis(),
     val attempts: Int = 0,
-    val lastAttemptEpochMs: Long = 0L
+    val lastAttemptEpochMs: Long = 0L,
+    val isFailed: Boolean = false
 )
 
-class Outbox {
+class Outbox(private val fileNameOverride: String? = null) {
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val fileName: String get() = fileNameOverride ?: OUTBOX_FILENAME
+
+    private val json = Json {
+        ignoreUnknownKeys = true
+        prettyPrint = true
+    }
     private val mutex = Mutex()
     private val seqGenerator = AtomicLong(System.currentTimeMillis())
     private var items = mutableListOf<OutboxItem>()
@@ -31,7 +37,7 @@ class Outbox {
     }
 
     private fun loadOutbox() {
-        val raw = readTextFile(OUTBOX_FILENAME)
+        val raw = readTextFile(fileName)
         if (!raw.isNullOrBlank()) {
             try {
                 items = json.decodeFromString<List<OutboxItem>>(raw).toMutableList()
@@ -39,12 +45,16 @@ class Outbox {
                 println("Failed to parse outbox: ${e.message}")
             }
         }
+        // Seed seqGenerator from highest persisted seq (Stage 6.2, §0.9)
+        val maxPersistedSeq = items.maxOfOrNull { it.seq } ?: 0L
+        val now = System.currentTimeMillis()
+        seqGenerator.set(maxOf(maxPersistedSeq, now))
     }
 
     private fun saveOutboxLocked() {
         try {
             val raw = json.encodeToString(items)
-            saveTextFile(OUTBOX_FILENAME, raw)
+            saveTextFile(fileName, raw)
         } catch (e: Exception) {
             println("Failed to persist outbox: ${e.message}")
         }
@@ -70,22 +80,34 @@ class Outbox {
     }
 
     suspend fun getPendingForDevice(targetDeviceId: String): List<OutboxItem> = mutex.withLock {
-        items.filter { it.targetDeviceId == targetDeviceId }.toList()
+        items.filter { it.targetDeviceId == targetDeviceId && !it.isFailed }.toList()
     }
 
-    suspend fun markAttempt(seq: Long) = mutex.withLock {
+    suspend fun getAllItems(): List<OutboxItem> = mutex.withLock {
+        items.toList()
+    }
+
+    suspend fun markAttempt(seq: Long): Boolean = mutex.withLock {
         val index = items.indexOfFirst { it.seq == seq }
         if (index >= 0) {
             val current = items[index]
+            val newAttempts = current.attempts + 1
+            val isFailed = newAttempts >= MAX_OUTBOX_ATTEMPTS
             items[index] = current.copy(
-                attempts = current.attempts + 1,
-                lastAttemptEpochMs = System.currentTimeMillis()
+                attempts = newAttempts,
+                lastAttemptEpochMs = System.currentTimeMillis(),
+                isFailed = isFailed
             )
             saveOutboxLocked()
+            return@withLock !isFailed
         }
+        false
     }
 
+    fun currentHighestSeq(): Long = seqGenerator.get()
+
     companion object {
+        const val MAX_OUTBOX_ATTEMPTS = 5
         private const val OUTBOX_FILENAME = "courier_link_outbox.json"
     }
 }

@@ -210,6 +210,31 @@ class PlatformActionsAndroid : PlatformActions {
         }
     }
 
+    override fun onDeviceLinkStateChanged(
+        pairedCount: Int,
+        connectedCount: Int,
+        primaryDeviceName: String?,
+        primaryDeviceStatus: String?
+    ) {
+        try {
+            val intent = Intent().apply {
+                setClassName(context.packageName, "courier.android.DownloadService")
+                action = "courier.action.UPDATE_DEVICE_LINK"
+                putExtra("extra_paired_count", pairedCount)
+                putExtra("extra_connected_count", connectedCount)
+                putExtra("extra_primary_name", primaryDeviceName)
+                putExtra("extra_primary_status", primaryDeviceStatus)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && pairedCount > 0) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        } catch (e: Exception) {
+            Log.w("Courier", "Failed to update Device Link service state", e)
+        }
+    }
+
     override fun getAppStorageDirectory(): String {
         return context.filesDir.absolutePath
     }

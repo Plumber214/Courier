@@ -54,13 +54,13 @@ enum class AppTab(val title: String, val icon: ImageVector) {
 }
 
 @Composable
-fun App() {
+fun App(initialTab: AppTab = AppTab.DOWNLOADS) {
     val downloadManager = AppModule.downloadManager
     val homeViewModel = remember { AppModule.provideHomeViewModel() }
     val settingsViewModel = remember { AppModule.provideSettingsViewModel() }
     val devicesViewModel = remember { AppModule.provideDevicesViewModel() }
 
-    var selectedTab by rememberSaveable { mutableStateOf(AppTab.DOWNLOADS) }
+    var selectedTab by rememberSaveable { mutableStateOf(initialTab) }
     val isAndroid = remember { getPlatformActions().isAndroid() }
 
     CourierTheme {

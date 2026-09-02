@@ -19,8 +19,14 @@ class MainActivity : ComponentActivity() {
         requestNotificationPermission()
         handleIncomingIntent(intent)
 
+        val initialTab = if (intent?.getStringExtra("EXTRA_INITIAL_TAB") == "DEVICES") {
+            courier.ui.AppTab.DEVICES
+        } else {
+            courier.ui.AppTab.DOWNLOADS
+        }
+
         setContent {
-            App()
+            App(initialTab = initialTab)
         }
     }
 

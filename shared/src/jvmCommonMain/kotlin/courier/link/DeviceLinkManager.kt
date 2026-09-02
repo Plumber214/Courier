@@ -127,6 +127,21 @@ class DeviceLinkManager(
                 }
             }
         }
+
+        // Notify platform of link state (for Android foreground service binding, F4)
+        scope.launch {
+            combine(trustStore.pairedDevices, _connectionStates) { paired, states ->
+                val connectedCount = paired.count { states[it.deviceId] == ConnectionStatus.CONNECTED }
+                val primary = paired.firstOrNull()
+                val primaryStatus = primary?.let { states[it.deviceId]?.name ?: "DISCONNECTED" }
+                getPlatformActions().onDeviceLinkStateChanged(
+                    pairedCount = paired.size,
+                    connectedCount = connectedCount,
+                    primaryDeviceName = primary?.deviceName,
+                    primaryDeviceStatus = primaryStatus
+                )
+            }.collect {}
+        }
     }
 
     fun setDevicesTabActive(active: Boolean) {

@@ -1,4 +1,4 @@
-﻿package courier.link
+package courier.link
 
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
@@ -177,6 +177,7 @@ class LinkIntegrationTest {
             onLinkEstablished = { establishedLinks.offer(it) }
         ).also { servers += it }.start(port)
 
+        delay(150)
         Socket("127.0.0.1", port).use { hostile ->
             val out = hostile.getOutputStream()
             val chunk = ByteArray(8 * 1024) { 'x'.code.toByte() }

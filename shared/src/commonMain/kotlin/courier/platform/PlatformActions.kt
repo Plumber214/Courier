@@ -14,6 +14,12 @@ interface PlatformActions {
     fun onDownloadStarted(title: String) {}
     fun onDownloadProgress(title: String, progress: Float, speed: String?, eta: String?) {}
     fun onDownloadStopped() {}
+    fun onDeviceLinkStateChanged(
+        pairedCount: Int,
+        connectedCount: Int,
+        primaryDeviceName: String?,
+        primaryDeviceStatus: String?
+    ) {}
 
     /**
      * When the artifact currently executing was built, as "yyyy-MM-dd HH:mm",

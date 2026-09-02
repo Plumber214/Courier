@@ -59,6 +59,20 @@ kotlin {
             }
         }
 
+        // Tests for jvmCommonMain code. Without this they have to live in
+        // commonTest, where they only compile because desktopTest happens to
+        // pull commonTest sources in against the desktop classpath - and would
+        // break the moment Android unit tests are run.
+        val jvmCommonTest by creating {
+            dependsOn(commonTest)
+            dependencies {
+                implementation(kotlin("test"))
+            }
+        }
+
+        val androidUnitTest by getting { dependsOn(jvmCommonTest) }
+        val desktopTest by getting { dependsOn(jvmCommonTest) }
+
         val androidMain by getting {
             dependsOn(jvmCommonMain)
             dependencies {

@@ -28,7 +28,12 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
-class CertificateStore {
+/**
+ * @param storageDirOverride where the keypair and device id live. Defaults to
+ *   the app storage directory; supplied explicitly only by tests, which need
+ *   two independent identities in one process to exercise a real handshake.
+ */
+class CertificateStore(storageDirOverride: File? = null) {
 
     val deviceId: String
     val certificate: X509Certificate
@@ -43,7 +48,7 @@ class CertificateStore {
             Security.addProvider(BouncyCastleProvider())
         }
 
-        val storageDir = File(getPlatformActions().getAppStorageDirectory())
+        val storageDir = storageDirOverride ?: File(getPlatformActions().getAppStorageDirectory())
         if (!storageDir.exists()) {
             storageDir.mkdirs()
         }
@@ -144,7 +149,22 @@ class CertificateStore {
                 }
             }
 
-            override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf(certificate)
+            /**
+             * Deliberately empty, and it must stay that way.
+             *
+             * On the side acting as TLS server this list becomes the
+             * certificate_authorities of the CertificateRequest. Returning our
+             * own certificate advertised "only certs issued by me are
+             * acceptable" — and since every device here is self-signed, the
+             * peer's KeyManager could never find a match. It sent an empty
+             * chain, and the handshake died with certificate_required.
+             *
+             * Empty means "no issuer constraint", so the peer offers its own
+             * self-signed certificate. Trust is not weakened by this: identity
+             * is decided by the pinning check in checkClientTrusted /
+             * checkServerTrusted above, not by issuer.
+             */
+            override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
         }
 
         val sslContext = SSLContext.getInstance("TLSv1.3")

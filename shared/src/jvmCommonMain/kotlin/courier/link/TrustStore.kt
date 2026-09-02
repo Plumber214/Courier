@@ -9,7 +9,14 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.security.cert.X509Certificate
 
-class TrustStore {
+/**
+ * @param fileNameOverride which file backs this store. Defaults to the shared
+ *   one; supplied explicitly only by tests that need two independent trust
+ *   stores in a single process.
+ */
+class TrustStore(private val fileNameOverride: String? = null) {
+
+    private val fileName: String get() = fileNameOverride ?: TRUST_STORE_FILENAME
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -24,7 +31,7 @@ class TrustStore {
     }
 
     private fun loadTrustedDevices() {
-        val raw = readTextFile(TRUST_STORE_FILENAME)
+        val raw = readTextFile(fileName)
         if (!raw.isNullOrBlank()) {
             try {
                 val list = json.decodeFromString<List<PairedDevice>>(raw)
@@ -38,7 +45,7 @@ class TrustStore {
     private fun saveTrustedDevices() {
         try {
             val raw = json.encodeToString(_pairedDevices.value)
-            saveTextFile(TRUST_STORE_FILENAME, raw)
+            saveTextFile(fileName, raw)
         } catch (e: Exception) {
             println("Failed to save trusted devices: ${e.message}")
         }

@@ -20,6 +20,7 @@ import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.security.cert.X509Certificate
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 class LinkServer(
@@ -34,6 +35,11 @@ class LinkServer(
     private var serverJob: Job? = null
     private val activeConnections = AtomicInteger(0)
 
+    // Per-source-IP counts, not just a global total. With only a global cap one
+    // host can occupy every slot and lock out the devices you actually paired
+    // with — the connection-flooding half of CVE-2020-26164.
+    private val connectionsPerIp = ConcurrentHashMap<String, Int>()
+
     fun start(port: Int = LinkConstants.DEFAULT_PORT) {
         stop()
         serverJob = scope.launch {
@@ -45,9 +51,16 @@ class LinkServer(
 
                 while (isActive && !ss.isClosed) {
                     val clientSocket = ss.accept()
+                    val sourceIp = clientSocket.inetAddress?.hostAddress ?: "unknown"
 
-                    // Connection Cap (CVE Mitigation §1.4)
+                    // Connection caps (CVE Mitigation §1.4): global, then per-IP.
                     if (activeConnections.get() >= LinkConstants.MAX_CONCURRENT_CONNECTIONS) {
+                        clientSocket.close()
+                        continue
+                    }
+                    val perIp = connectionsPerIp.compute(sourceIp) { _, count -> (count ?: 0) + 1 } ?: 1
+                    if (perIp > LinkConstants.MAX_CONNECTIONS_PER_IP) {
+                        releaseIp(sourceIp)
                         clientSocket.close()
                         continue
                     }
@@ -56,10 +69,14 @@ class LinkServer(
                     scope.launch {
                         try {
                             handleInboundConnection(clientSocket)
+                        } catch (e: PacketTooLargeException) {
+                            println("[SECURITY] Refusing $sourceIp: ${e.message}")
+                            try { clientSocket.close() } catch (_: Exception) {}
                         } catch (e: Exception) {
                             println("Inbound connection error: ${e.message}")
                         } finally {
                             activeConnections.decrementAndGet()
+                            releaseIp(sourceIp)
                         }
                     }
                 }
@@ -77,6 +94,15 @@ class LinkServer(
             serverSocket?.close()
         } catch (_: Exception) {}
         serverSocket = null
+        connectionsPerIp.clear()
+    }
+
+    /** Decrements the per-IP count, removing the entry at zero so the map cannot grow without bound. */
+    private fun releaseIp(sourceIp: String) {
+        connectionsPerIp.compute(sourceIp) { _, count ->
+            val next = (count ?: 1) - 1
+            if (next <= 0) null else next
+        }
     }
 
     private suspend fun handleInboundConnection(rawSocket: Socket) = withContext(Dispatchers.IO) {
@@ -95,7 +121,9 @@ class LinkServer(
         writer.flush()
 
         // Read peer identity
-        val peerLine = reader.readLine() ?: throw Exception("Peer disconnected before identity exchange")
+        // Bounded: this read happens pre-TLS and pre-pairing, so it is the most
+        // exposed point in the whole transport. See BoundedLineReader.
+        val peerLine = reader.readLineBounded() ?: throw Exception("Peer disconnected before identity exchange")
         val peerPacket = json.decodeFromString<LinkPacket>(peerLine)
         if (peerPacket.type != LinkConstants.TYPE_IDENTITY) {
             throw Exception("Expected courier.identity, got ${peerPacket.type}")
@@ -162,7 +190,9 @@ class LinkServer(
             writer.write(json.encodeToString(myIdentityPacket) + "\n")
             writer.flush()
 
-            val peerLine = reader.readLine() ?: throw Exception("Peer disconnected before identity exchange")
+            // Bounded: this read happens pre-TLS and pre-pairing, so it is the most
+        // exposed point in the whole transport. See BoundedLineReader.
+        val peerLine = reader.readLineBounded() ?: throw Exception("Peer disconnected before identity exchange")
             val peerPacket = json.decodeFromString<LinkPacket>(peerLine)
             if (peerPacket.type != LinkConstants.TYPE_IDENTITY) {
                 throw Exception("Expected courier.identity, got ${peerPacket.type}")

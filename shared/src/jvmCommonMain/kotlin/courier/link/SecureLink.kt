@@ -55,13 +55,10 @@ class SecureLink(
         readJob = scope.launch {
             try {
                 while (isActive && isConnected) {
-                    val line = reader.readLine() ?: break
+                    // Bounded read: the cap has to be enforced while reading,
+                    // not after. See BoundedLineReader.
+                    val line = reader.readLineBounded() ?: break
                     if (line.isBlank()) continue
-
-                    if (line.length > LinkConstants.MAX_PACKET_SIZE_BYTES) {
-                        println("[SECURITY] Dropping oversized packet from $peerDeviceId (${line.length} bytes)")
-                        continue
-                    }
 
                     try {
                         val packet = json.decodeFromString<LinkPacket>(line)
@@ -70,6 +67,11 @@ class SecureLink(
                         println("Failed to parse packet from $peerDeviceId: ${e.message}")
                     }
                 }
+            } catch (e: PacketTooLargeException) {
+                // A peer that ignores the frame limit is broken or hostile.
+                // Skipping the frame would leave it free to keep going, so the
+                // connection goes instead.
+                println("[SECURITY] Dropping connection to $peerDeviceId: ${e.message}")
             } catch (_: Exception) {
             } finally {
                 close()

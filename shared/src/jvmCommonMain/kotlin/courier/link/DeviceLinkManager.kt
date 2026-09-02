@@ -71,7 +71,16 @@ class DeviceLinkManager(
     val discovery = Discovery(myIdentity, scope)
 
     private val activeLinks = ConcurrentHashMap<String, SecureLink>()
-    private val highestSeqPerDevice = ConcurrentHashMap<String, Long>()
+
+    /** Persisted so replays survive a restart of either side. */
+    private val replayGuard = ReplayGuard()
+
+    // Per-device reconnect backoff. Global backoff cannot express "this device
+    // is unreachable but that one just came back".
+    private val reconnectBackoffMs = ConcurrentHashMap<String, Long>()
+    private val nextAttemptAtMs = ConcurrentHashMap<String, Long>()
+
+    private val networkMonitor = createNetworkChangeMonitor()
 
     private val _connectionStates = MutableStateFlow<Map<String, ConnectionStatus>>(emptyMap())
     val connectionStates: StateFlow<Map<String, ConnectionStatus>> = _connectionStates.asStateFlow()
@@ -99,18 +108,32 @@ class DeviceLinkManager(
         linkServer.start()
         discovery.start()
         startReconnectLoop()
+        // Backoff alone makes recovery after a Wi-Fi bounce feel broken; this
+        // is what makes it feel instant.
+        networkMonitor.start { kickNetwork() }
     }
 
     fun stop() {
+        networkMonitor.stop()
         reconnectJob?.cancel()
         linkServer.stop()
         discovery.stop()
         activeLinks.values.forEach { it.close() }
         activeLinks.clear()
+        reconnectBackoffMs.clear()
+        nextAttemptAtMs.clear()
         _connectionStates.value = emptyMap()
     }
 
+    /**
+     * Re-announces and retries every paired device immediately.
+     *
+     * Clearing the backoff state is the point: without it a device already
+     * backed off to 30 s would ignore the kick and keep waiting.
+     */
     fun kickNetwork() {
+        reconnectBackoffMs.clear()
+        nextAttemptAtMs.clear()
         discovery.broadcastNow()
         scope.launch {
             reconnectAllPairedDevices()
@@ -141,6 +164,20 @@ class DeviceLinkManager(
     private suspend fun handleIncomingPacket(link: SecureLink, packet: LinkPacket) {
         val peerId = link.peerDeviceId
 
+        // An unpaired peer completes the TLS handshake — it has to, or pairing
+        // could never happen — so authorisation is enforced here instead.
+        // Only pairing and liveness are reachable before pairing completes;
+        // everything else, status updates included, requires a paired peer.
+        // Without this an unpaired device on the LAN can inject fake download
+        // progress into the UI.
+        if (!trustStore.isPaired(peerId) &&
+            packet.type != LinkConstants.TYPE_PAIR &&
+            packet.type != LinkConstants.TYPE_PING
+        ) {
+            println("[SECURITY] Rejecting ${packet.type} from unpaired device $peerId")
+            return
+        }
+
         when (packet.type) {
             LinkConstants.TYPE_PING -> {
                 // Heartbeat received
@@ -159,27 +196,20 @@ class DeviceLinkManager(
             }
 
             LinkConstants.TYPE_DOWNLOAD_REQUEST -> {
-                if (!trustStore.isPaired(peerId)) {
-                    println("[SECURITY] Rejecting download request from unpaired device $peerId")
-                    return
-                }
-
                 val seq = packet.body["seq"]?.jsonPrimitive?.longOrNull ?: 0L
                 val url = packet.body["url"]?.jsonPrimitive?.contentOrNull ?: ""
                 val formatHint = packet.body["formatHint"]?.jsonPrimitive?.contentOrNull
                 val audioOnly = packet.body["audioOnly"]?.jsonPrimitive?.booleanOrNull ?: false
                 val destinationHint = packet.body["destinationHint"]?.jsonPrimitive?.contentOrNull
 
-                // Deduplication check
-                val highest = highestSeqPerDevice[peerId] ?: 0L
-                if (seq <= highest && seq > 0) {
-                    // Replay - send ack again and drop duplicate
+                // Deduplication. Re-ack the replay so the sender can retire the
+                // outbox entry whose ack was what went missing.
+                if (replayGuard.isReplay(peerId, seq)) {
                     sendAck(link, seq)
                     return
                 }
-                highestSeqPerDevice[peerId] = seq
+                replayGuard.record(peerId, seq)
 
-                // Send ack
                 sendAck(link, seq)
 
                 if (url.isNotBlank()) {
@@ -224,7 +254,6 @@ class DeviceLinkManager(
             }
 
             LinkConstants.TYPE_CLIPBOARD -> {
-                if (!trustStore.isPaired(peerId)) return
                 val paired = trustStore.getPairedDevice(peerId)
                 if (paired?.isClipboardSyncEnabled == true) {
                     val content = packet.body["content"]?.jsonPrimitive?.contentOrNull ?: ""
@@ -339,6 +368,23 @@ class DeviceLinkManager(
         )
     }
 
+    /**
+     * Unpairs a device and drops every trace of it.
+     *
+     * The replay mark has to go with it: a later re-pair starts a fresh
+     * sequence, and a stale high-water mark would silently swallow its first
+     * requests as duplicates.
+     */
+    fun unpair(deviceId: String) {
+        val link = activeLinks.remove(deviceId)
+        pairingManager.unpair(deviceId, link)
+        link?.close()
+        replayGuard.forget(deviceId)
+        reconnectBackoffMs.remove(deviceId)
+        nextAttemptAtMs.remove(deviceId)
+        updateConnectionState(deviceId, ConnectionStatus.DISCONNECTED)
+    }
+
     suspend fun connectToManualIp(host: String, port: Int = LinkConstants.DEFAULT_PORT): Result<SecureLink> {
         val result = linkServer.connectOutbound(host, port)
         result.onSuccess { link ->
@@ -363,14 +409,21 @@ class DeviceLinkManager(
         }
     }
 
+    /**
+     * Ticks frequently and cheaply; [nextAttemptAtMs] decides which devices are
+     * actually retried.
+     *
+     * The previous version delayed by a single global backoff that only ever
+     * doubled and was never reset on success, so after about a minute of uptime
+     * every retry sat 30 s apart forever — including immediately after a
+     * successful connect. Backoff belongs per device, and has to reset.
+     */
     private fun startReconnectLoop() {
         reconnectJob?.cancel()
         reconnectJob = scope.launch {
-            var backoffMs = 2000L
             while (isActive) {
-                delay(backoffMs)
+                delay(LinkConstants.RECONNECT_TICK_MS)
                 reconnectAllPairedDevices()
-                backoffMs = (backoffMs * 2).coerceAtMost(30_000L) // Exponential backoff capped at 30s (§1.5)
             }
         }
     }
@@ -378,30 +431,50 @@ class DeviceLinkManager(
     private suspend fun reconnectAllPairedDevices() {
         val paired = trustStore.pairedDevices.value
         val discovered = discovery.discoveredDevices.value
+        val now = System.currentTimeMillis()
 
         for (device in paired) {
-            val active = activeLinks[device.deviceId]
+            val id = device.deviceId
+            val active = activeLinks[id]
             if (active != null && active.isConnected) {
-                updateConnectionState(device.deviceId, ConnectionStatus.CONNECTED)
+                // Connected: clear any backoff so the next drop retries promptly.
+                reconnectBackoffMs.remove(id)
+                nextAttemptAtMs.remove(id)
+                updateConnectionState(id, ConnectionStatus.CONNECTED)
                 continue
             }
 
-            // Find host address in discovered devices or custom IP
-            val host = device.customIp ?: discovered.firstOrNull { it.identity.deviceId == device.deviceId }?.hostAddress
-            val port = discovered.firstOrNull { it.identity.deviceId == device.deviceId }?.tcpPort ?: LinkConstants.DEFAULT_PORT
+            if (now < (nextAttemptAtMs[id] ?: 0L)) continue
 
-            if (host != null) {
-                updateConnectionState(device.deviceId, ConnectionStatus.CONNECTING)
-                val result = linkServer.connectOutbound(host, port)
-                result.onSuccess { link ->
-                    onLinkConnected(link)
-                }.onFailure {
-                    updateConnectionState(device.deviceId, ConnectionStatus.DISCONNECTED)
-                }
-            } else {
-                updateConnectionState(device.deviceId, ConnectionStatus.DISCONNECTED)
+            // Find host address in discovered devices or custom IP
+            val host = device.customIp ?: discovered.firstOrNull { it.identity.deviceId == id }?.hostAddress
+            val port = discovered.firstOrNull { it.identity.deviceId == id }?.tcpPort ?: LinkConstants.DEFAULT_PORT
+
+            if (host == null) {
+                updateConnectionState(id, ConnectionStatus.DISCONNECTED)
+                scheduleRetry(id)
+                continue
             }
+
+            updateConnectionState(id, ConnectionStatus.CONNECTING)
+            linkServer.connectOutbound(host, port)
+                .onSuccess { link ->
+                    reconnectBackoffMs.remove(id)
+                    nextAttemptAtMs.remove(id)
+                    onLinkConnected(link)
+                }
+                .onFailure {
+                    updateConnectionState(id, ConnectionStatus.DISCONNECTED)
+                    scheduleRetry(id)
+                }
         }
+    }
+
+    /** Doubles this device's backoff toward the cap and sets its next eligible attempt. */
+    private fun scheduleRetry(deviceId: String) {
+        val next = nextBackoffMs(reconnectBackoffMs[deviceId] ?: 0L)
+        reconnectBackoffMs[deviceId] = next
+        nextAttemptAtMs[deviceId] = System.currentTimeMillis() + next
     }
 
     private fun updateConnectionState(deviceId: String, status: ConnectionStatus) {

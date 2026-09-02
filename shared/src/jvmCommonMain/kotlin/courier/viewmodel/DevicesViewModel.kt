@@ -65,7 +65,9 @@ class DevicesViewModel(
     }
 
     fun unpair(deviceId: String) {
-        linkManager.pairingManager.unpair(deviceId)
+        // Goes through the manager, not the pairing manager directly, so the
+        // live link and the persisted replay mark are torn down too.
+        linkManager.unpair(deviceId)
     }
 
     fun toggleClipboardSync(deviceId: String, enabled: Boolean) {

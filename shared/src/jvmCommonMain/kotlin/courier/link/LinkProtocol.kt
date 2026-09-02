@@ -11,12 +11,20 @@ object LinkConstants {
     // Security Caps (CVE Mitigation §1.4)
     const val MAX_PACKET_SIZE_BYTES = 64 * 1024 // 64 KB
     const val MAX_CONCURRENT_CONNECTIONS = 8
+    /** Per-source cap, so one host cannot consume every slot in the global cap. */
+    const val MAX_CONNECTIONS_PER_IP = 2
     const val SOCKET_CONNECT_TIMEOUT_MS = 10_000 // 10s
     const val SOCKET_READ_TIMEOUT_MS = 90_000 // 90s
     const val HEARTBEAT_INTERVAL_MS = 30_000L // 30s
     const val PAIRING_TIMEOUT_MS = 30_000L // 30s
     const val UDP_RATE_LIMIT_PER_IP_MS = 500L
     const val MAX_DISCOVERED_DEVICES = 32
+
+    // Reconnection. The tick is short and cheap; per-device backoff decides
+    // which devices are actually retried on any given tick.
+    const val RECONNECT_TICK_MS = 1_000L
+    const val RECONNECT_BACKOFF_MIN_MS = 2_000L
+    const val RECONNECT_BACKOFF_MAX_MS = 30_000L
 
     // Packet Types
     const val TYPE_IDENTITY = "courier.identity"
@@ -27,6 +35,20 @@ object LinkConstants {
     const val TYPE_DOWNLOAD_REQUEST = "courier.download.request"
     const val TYPE_DOWNLOAD_ACCEPTED = "courier.download.accepted"
     const val TYPE_DOWNLOAD_STATUS = "courier.download.status"
+}
+
+/**
+ * The next reconnect delay for a device, given its previous one.
+ *
+ * Zero or negative means "no backoff recorded" — either a first failure or a
+ * backoff that was cleared by a successful connection — and starts again at the
+ * minimum. Callers must clear the stored value on success; a backoff that only
+ * ever grows pins every retry at the maximum forever.
+ */
+fun nextBackoffMs(previousMs: Long): Long = if (previousMs <= 0L) {
+    LinkConstants.RECONNECT_BACKOFF_MIN_MS
+} else {
+    (previousMs * 2).coerceAtMost(LinkConstants.RECONNECT_BACKOFF_MAX_MS)
 }
 
 @Serializable

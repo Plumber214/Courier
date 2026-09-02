@@ -4,99 +4,90 @@ import courier.platform.getPlatformActions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
-import java.security.MessageDigest
+
+sealed interface SendClipboardResult {
+    data class Success(val deviceName: String) : SendClipboardResult
+    data class DeviceOffline(val deviceName: String) : SendClipboardResult
+    data object EmptyClipboard : SendClipboardResult
+    data class Error(val message: String) : SendClipboardResult
+}
+
+data class ClipboardReceivedEvent(
+    val senderDeviceId: String,
+    val senderDeviceName: String,
+    val previewText: String
+)
 
 class ClipboardSyncManager(
-    private val linkManager: DeviceLinkManager,
+    val linkManager: DeviceLinkManager,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.Default)
 ) {
-    private var lastLocalClipHash: String? = null
-    private var lastReceivedClipHash: String? = null
-
     private var incomingJob: Job? = null
-    private var desktopPollJob: Job? = null
+
+    private val _clipboardReceivedEvents = MutableSharedFlow<ClipboardReceivedEvent>(extraBufferCapacity = 16)
+    val clipboardReceivedEvents: SharedFlow<ClipboardReceivedEvent> = _clipboardReceivedEvents.asSharedFlow()
 
     fun start() {
         stop()
-
-        // 1. Listen for incoming clipboard packets from paired devices
+        // Listen for incoming explicit clipboard packets from paired devices (F2, Stage 4.5)
         incomingJob = scope.launch {
             linkManager.incomingClipboardEvents.collect { (senderDeviceId, content) ->
                 handleIncomingClipboard(senderDeviceId, content)
-            }
-        }
-
-        // 2. On Desktop, continuously poll system clipboard (Decision E6 / §1.7)
-        if (!getPlatformActions().isAndroid()) {
-            desktopPollJob = scope.launch {
-                while (isActive) {
-                    delay(1500L) // Poll every 1.5s on desktop
-                    pollAndSyncClipboard()
-                }
             }
         }
     }
 
     fun stop() {
         incomingJob?.cancel()
-        desktopPollJob?.cancel()
+        incomingJob = null
     }
 
     /**
-     * Called when the app is foregrounded on Android or when the user manually pushes clipboard.
+     * Sends the current system clipboard text explicitly to [targetDeviceId] (Stage 4.3).
+     * No background polling or automatic sends exist.
      */
-    fun pushClipboardToPairedDevices() {
-        val clipText = getPlatformActions().getClipboardText() ?: return
-        if (clipText.isBlank()) return
+    fun sendClipboardToDevice(targetDeviceId: String): SendClipboardResult {
+        val paired = linkManager.trustStore.getPairedDevice(targetDeviceId)
+        val devName = paired?.deviceName ?: "device"
 
-        val hash = computeHash(clipText)
-        lastLocalClipHash = hash
-
-        val paired = linkManager.trustStore.pairedDevices.value
-        for (device in paired) {
-            if (device.isClipboardSyncEnabled) {
-                linkManager.sendClipboard(device.deviceId, clipText)
-            }
-        }
-    }
-
-    private fun pollAndSyncClipboard() {
-        val clipText = getPlatformActions().getClipboardText() ?: return
-        if (clipText.isBlank()) return
-
-        val hash = computeHash(clipText)
-        if (hash == lastLocalClipHash || hash == lastReceivedClipHash) {
-            return // No change or originated from remote sync
+        val clipText = getPlatformActions().getClipboardText()
+        if (clipText.isNullOrBlank()) {
+            return SendClipboardResult.EmptyClipboard
         }
 
-        lastLocalClipHash = hash
+        val isConnected = linkManager.connectionStates.value[targetDeviceId] == ConnectionStatus.CONNECTED
+        if (!isConnected) {
+            return SendClipboardResult.DeviceOffline(devName)
+        }
 
-        val paired = linkManager.trustStore.pairedDevices.value
-        for (device in paired) {
-            if (device.isClipboardSyncEnabled) {
-                linkManager.sendClipboard(device.deviceId, clipText)
-            }
+        val sent = linkManager.sendClipboard(targetDeviceId, clipText)
+        return if (sent) {
+            SendClipboardResult.Success(devName)
+        } else {
+            SendClipboardResult.DeviceOffline(devName)
         }
     }
 
     private fun handleIncomingClipboard(senderDeviceId: String, content: String) {
         if (content.isBlank()) return
+        val sender = linkManager.trustStore.getPairedDevice(senderDeviceId)
+        val senderName = sender?.deviceName ?: "Courier device"
 
-        val hash = computeHash(content)
-        if (hash == lastReceivedClipHash || hash == lastLocalClipHash) {
-            return // Deduplicate loop
-        }
-
-        lastReceivedClipHash = hash
+        // 1. Apply to local system clipboard immediately (Decision F2 / Stage 4.5)
         getPlatformActions().setClipboardText(content)
-    }
 
-    private fun computeHash(text: String): String {
-        val md = MessageDigest.getInstance("MD5")
-        val bytes = md.digest(text.toByteArray(Charsets.UTF_8))
-        return bytes.joinToString("") { "%02x".format(it) }
+        // 2. Emit confirmation event with sender name
+        val preview = if (content.length > 40) content.take(37) + "..." else content
+        _clipboardReceivedEvents.tryEmit(
+            ClipboardReceivedEvent(
+                senderDeviceId = senderDeviceId,
+                senderDeviceName = senderName,
+                previewText = preview
+            )
+        )
     }
 }

@@ -72,14 +72,15 @@ class IdentityAndRenameTest {
         val trustA = TrustStore(fileNameOverride = trustFileA)
         val trustB = TrustStore(fileNameOverride = trustFileB)
 
-        val managerA = DeviceLinkManager(certStore = certA, trustStore = trustA).also { managers += it }
-        val managerB = DeviceLinkManager(certStore = certB, trustStore = trustB).also { managers += it }
+        val managerA = DeviceLinkManager(certStore = certA, trustStore = trustA, tcpPort = portA).also { managers += it }
+        val managerB = DeviceLinkManager(certStore = certB, trustStore = trustB, tcpPort = portB).also { managers += it }
 
         managerB.linkServer.start(portB)
+        delay(150)
 
         // Connect outbound from A to B
         val connectResult = managerA.linkServer.connectOutbound("127.0.0.1", portB)
-        assertTrue(connectResult.isSuccess, "Outbound connection failed")
+        assertTrue(connectResult.isSuccess, "Outbound connection failed: ${connectResult.exceptionOrNull()?.message}")
         val linkA = connectResult.getOrThrow()
 
         // Pair A and B

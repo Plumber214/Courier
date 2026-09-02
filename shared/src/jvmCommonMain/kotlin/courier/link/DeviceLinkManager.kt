@@ -52,6 +52,7 @@ class DeviceLinkManager(
     val certStore: CertificateStore = CertificateStore(),
     val trustStore: TrustStore = TrustStore(),
     val outbox: Outbox = Outbox(),
+    val tcpPort: Int = LinkConstants.DEFAULT_PORT,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO)
 ) {
     private val json = Json { ignoreUnknownKeys = true }
@@ -65,7 +66,8 @@ class DeviceLinkManager(
             DeviceIdentity(
                 deviceId = certStore.deviceId,
                 deviceName = devName,
-                deviceType = devType
+                deviceType = devType,
+                tcpPort = tcpPort
             )
         )
     }
@@ -167,7 +169,7 @@ class DeviceLinkManager(
     private fun startInternal() {
         if (isSubsystemRunning) return
         isSubsystemRunning = true
-        linkServer.start()
+        linkServer.start(tcpPort)
         discovery.startUdpListener()
         startReconnectLoop()
         networkMonitor.start { kickNetwork() }
@@ -329,8 +331,7 @@ class DeviceLinkManager(
             }
 
             LinkConstants.TYPE_CLIPBOARD -> {
-                val paired = trustStore.getPairedDevice(peerId)
-                if (paired?.isClipboardSyncEnabled == true) {
+                if (trustStore.isPaired(peerId)) {
                     val content = packet.body["content"]?.jsonPrimitive?.contentOrNull ?: ""
                     if (content.isNotBlank()) {
                         _incomingClipboardEvents.tryEmit(peerId to content)
@@ -447,12 +448,11 @@ class DeviceLinkManager(
         )
     }
 
-    fun sendClipboard(targetDeviceId: String, content: String) {
-        val paired = trustStore.getPairedDevice(targetDeviceId)
-        if (paired?.isClipboardSyncEnabled != true) return
-
-        val link = activeLinks[targetDeviceId] ?: return
-        link.sendPacket(
+    fun sendClipboard(targetDeviceId: String, content: String): Boolean {
+        if (!trustStore.isPaired(targetDeviceId)) return false
+        val link = activeLinks[targetDeviceId] ?: return false
+        if (!link.isConnected) return false
+        return link.sendPacket(
             LinkPacket(
                 type = LinkConstants.TYPE_CLIPBOARD,
                 body = buildJsonObject {

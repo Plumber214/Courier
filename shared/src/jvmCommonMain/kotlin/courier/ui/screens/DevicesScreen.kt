@@ -100,10 +100,18 @@ fun DevicesScreen(
     val connectionStates by viewModel.connectionStates.collectAsState()
     val pairingState by viewModel.pairingState.collectAsState()
     val manualConnectStatus by viewModel.manualConnectStatus.collectAsState()
+    val clipboardStatusMessage by viewModel.clipboardStatusMessage.collectAsState()
     val isScanning by viewModel.isScanning.collectAsState()
 
     var manualIpText by remember { mutableStateOf("") }
     var showManualIpDialog by remember { mutableStateOf(false) }
+
+    androidx.compose.runtime.LaunchedEffect(clipboardStatusMessage) {
+        if (clipboardStatusMessage != null) {
+            kotlinx.coroutines.delay(3500L)
+            viewModel.clearClipboardStatusMessage()
+        }
+    }
 
     Column(
         modifier = modifier
@@ -111,6 +119,55 @@ fun DevicesScreen(
             .verticalScroll(scrollState)
             .padding(horizontal = 24.dp, vertical = 20.dp)
     ) {
+        // Clipboard Status Banner (Stage 4)
+        androidx.compose.animation.AnimatedVisibility(
+            visible = clipboardStatusMessage != null,
+            enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandVertically(),
+            exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.shrinkVertically()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 14.dp)
+                    .background(PrimaryContainer.copy(alpha = 0.9f), RoundedCornerShape(10.dp))
+                    .border(1.dp, PrimaryIndigo, RoundedCornerShape(10.dp))
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.ContentPaste,
+                            contentDescription = null,
+                            tint = AccentCyan,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = clipboardStatusMessage ?: "",
+                            color = TextPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    IconButton(
+                        onClick = { viewModel.clearClipboardStatusMessage() },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Dismiss",
+                            tint = TextMuted,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+        }
+
         // Header
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -255,19 +312,6 @@ fun DevicesScreen(
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 1.sp
             )
-
-            if (pairedDevices.any { it.isClipboardSyncEnabled }) {
-                TextButton(onClick = { viewModel.pushClipboard() }) {
-                    Icon(
-                        imageVector = Icons.Default.ContentPaste,
-                        contentDescription = null,
-                        tint = AccentCyan,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Push Clipboard", color = AccentCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-            }
         }
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -310,7 +354,7 @@ fun DevicesScreen(
                     PairedDeviceCard(
                         device = device,
                         status = status,
-                        onToggleClipboard = { viewModel.toggleClipboardSync(device.deviceId, it) },
+                        onSendClipboard = { viewModel.sendClipboard(device.deviceId) },
                         onUnpair = { viewModel.unpair(device.deviceId) }
                     )
                 }
@@ -535,7 +579,7 @@ fun DevicesScreen(
 fun PairedDeviceCard(
     device: PairedDevice,
     status: ConnectionStatus,
-    onToggleClipboard: (Boolean) -> Unit,
+    onSendClipboard: () -> Unit,
     onUnpair: () -> Unit
 ) {
     val statusColor = when (status) {
@@ -618,7 +662,7 @@ fun PairedDeviceCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Clipboard Sync Toggle
+            // Explicit Send Clipboard Action (Decision F2, Stage 4.3)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -627,40 +671,36 @@ fun PairedDeviceCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Icon(
                         imageVector = Icons.Default.ContentPaste,
                         contentDescription = null,
-                        tint = TextMuted,
+                        tint = AccentCyan,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Column {
-                        Text(
-                            text = "Sync Clipboard",
-                            color = TextPrimary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                        if (getPlatformActions().isAndroid()) {
-                            Text(
-                                text = "Manual push required while backgrounded on Android",
-                                color = TextMuted,
-                                fontSize = 10.sp
-                            )
-                        }
-                    }
+                    Text(
+                        text = "Send clipboard to ${device.deviceName}",
+                        color = TextPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
 
-                Switch(
-                    checked = device.isClipboardSyncEnabled,
-                    onCheckedChange = onToggleClipboard,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = PrimaryIndigo,
-                        uncheckedTrackColor = SurfaceVariantDark
-                    )
-                )
+                Button(
+                    onClick = onSendClipboard,
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = PrimaryIndigo
+                    ),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    modifier = Modifier.height(32.dp)
+                ) {
+                    Text("Send", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }

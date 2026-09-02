@@ -1,5 +1,6 @@
 package courier.viewmodel
 
+import courier.link.ClipboardSyncManager
 import courier.link.ConnectionStatus
 import courier.link.DeviceIdentity
 import courier.link.DeviceLinkManager
@@ -7,6 +8,7 @@ import courier.link.DiscoveredDevice
 import courier.link.LinkConstants
 import courier.link.PairedDevice
 import courier.link.PairingSessionState
+import courier.link.SendClipboardResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,10 +30,21 @@ class DevicesViewModel(
     private val _manualConnectStatus = MutableStateFlow<String?>(null)
     val manualConnectStatus: StateFlow<String?> = _manualConnectStatus.asStateFlow()
 
+    private val _clipboardStatusMessage = MutableStateFlow<String?>(null)
+    val clipboardStatusMessage: StateFlow<String?> = _clipboardStatusMessage.asStateFlow()
+
     val isScanning: StateFlow<Boolean> = linkManager.discovery.isScanning
 
     private val _showRenameDialog = MutableStateFlow(false)
     val showRenameDialog: StateFlow<Boolean> = _showRenameDialog.asStateFlow()
+
+    init {
+        scope.launch {
+            courier.di.AppModule.clipboardSyncManager.clipboardReceivedEvents.collect { event ->
+                _clipboardStatusMessage.value = "Clipboard received from ${event.senderDeviceName}"
+            }
+        }
+    }
 
     fun setDevicesTabActive(active: Boolean) {
         linkManager.setDevicesTabActive(active)
@@ -91,12 +104,26 @@ class DevicesViewModel(
         linkManager.unpair(deviceId)
     }
 
-    fun toggleClipboardSync(deviceId: String, enabled: Boolean) {
-        linkManager.trustStore.setClipboardSync(deviceId, enabled)
+    fun sendClipboard(deviceId: String) {
+        val result = courier.di.AppModule.clipboardSyncManager.sendClipboardToDevice(deviceId)
+        when (result) {
+            is SendClipboardResult.Success -> {
+                _clipboardStatusMessage.value = "Clipboard sent to ${result.deviceName}"
+            }
+            is SendClipboardResult.DeviceOffline -> {
+                _clipboardStatusMessage.value = "${result.deviceName} is offline"
+            }
+            is SendClipboardResult.EmptyClipboard -> {
+                _clipboardStatusMessage.value = "Clipboard is empty"
+            }
+            is SendClipboardResult.Error -> {
+                _clipboardStatusMessage.value = "Failed to send: ${result.message}"
+            }
+        }
     }
 
-    fun pushClipboard() {
-        courier.di.AppModule.clipboardSyncManager.pushClipboardToPairedDevices()
+    fun clearClipboardStatusMessage() {
+        _clipboardStatusMessage.value = null
     }
 
     fun connectManualIp(ip: String, port: Int = LinkConstants.DEFAULT_PORT) {

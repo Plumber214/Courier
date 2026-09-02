@@ -39,6 +39,45 @@ compose.desktop {
 }
 
 // ---------------------------------------------------------------------------
+// Uber jar hygiene
+//
+// BouncyCastle ships SIGNED jars. Flattening them into an uber jar carries
+// META-INF/BC2048KE.SF and .DSA along with them, and the JVM then refuses to
+// load anything from the archive because the contents no longer match the
+// signature. The symptom is maximally misleading:
+//
+//     Error: Could not find or load main class courier.desktop.MainKt
+//     Caused by: java.lang.ClassNotFoundException: courier.desktop.MainKt
+//
+// even though MainKt.class is present and the manifest names it correctly.
+// META-INF/INDEX.LIST breaks class lookup the same way: it tells the loader
+// which packages live in which jar, and a copy inherited from a dependency is
+// wrong for the merged archive.
+//
+// This shipped in v1.4.0 and v1.5.0 - both jars are unlaunchable. v1.3.0
+// predates the BouncyCastle dependency and runs fine, which is what made the
+// regression traceable.
+// ---------------------------------------------------------------------------
+
+// Applied to every Jar task in this project rather than to
+// packageUberJarForCurrentOS by name: the Compose plugin registers that task
+// lazily, so `tasks.named` at configuration time fails with "Task with name
+// 'packageUberJarForCurrentOS' not found". Nothing we build should carry
+// another project's signatures or package index anyway.
+//
+// This does not touch the MSI/EXE distributions, which ship dependency jars
+// unmodified and whose signatures are therefore still valid.
+// Note the fully qualified type. The Kotlin DSL's default `Jar` import is
+// org.gradle.api.tasks.bundling.Jar, which is a SUBCLASS of the
+// org.gradle.jvm.tasks.Jar that Compose registers this task as - so
+// `withType<Jar>()` silently matches nothing and the build still succeeds
+// while producing an unlaunchable jar.
+tasks.withType<org.gradle.jvm.tasks.Jar>().configureEach {
+    exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA", "META-INF/*.EC")
+    exclude("META-INF/INDEX.LIST")
+}
+
+// ---------------------------------------------------------------------------
 // Release packaging
 //
 // `packageUberJarForCurrentOS` writes to build/compose/jars/, which ACCUMULATES

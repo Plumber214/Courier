@@ -83,7 +83,7 @@ class Discovery(
                     val packet = DatagramPacket(buffer, buffer.size)
                     socket.receive(packet)
 
-                    val remoteIp = packet.address.hostAddress
+                    val remoteIp = packet.address?.hostAddress ?: continue
                     val now = System.currentTimeMillis()
 
                     // 1. Rate Limiting per IP (CVE Mitigation §1.4)

@@ -118,7 +118,7 @@ class LinkServer(
             rawSocket = rawSocket,
             isTcpServer = true,
             sslContext = sslContext,
-            peerHost = rawSocket.inetAddress.hostAddress,
+            peerHost = rawSocket.inetAddress?.hostAddress ?: "127.0.0.1",
             peerPort = rawSocket.port
         )
 

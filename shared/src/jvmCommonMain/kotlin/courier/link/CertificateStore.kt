@@ -111,7 +111,8 @@ class CertificateStore {
 
         val signer = JcaContentSignerBuilder("SHA256withRSA").build(keyPair.private)
         val certHolder = builder.build(signer)
-        return JcaX509CertificateConverter().setProvider(BouncyCastleProvider.PROVIDER_NAME).getCertificate(certHolder)
+        val certFactory = java.security.cert.CertificateFactory.getInstance("X.509")
+        return certFactory.generateCertificate(java.io.ByteArrayInputStream(certHolder.encoded)) as X509Certificate
     }
 
     fun computeVerificationCode(peerCertSha256: String): String {

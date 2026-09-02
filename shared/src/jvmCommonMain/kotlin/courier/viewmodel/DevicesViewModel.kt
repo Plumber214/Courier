@@ -72,6 +72,10 @@ class DevicesViewModel(
         linkManager.trustStore.setClipboardSync(deviceId, enabled)
     }
 
+    fun pushClipboard() {
+        courier.di.AppModule.clipboardSyncManager.pushClipboardToPairedDevices()
+    }
+
     fun connectManualIp(ip: String, port: Int = LinkConstants.DEFAULT_PORT) {
         if (ip.isBlank()) return
         scope.launch {

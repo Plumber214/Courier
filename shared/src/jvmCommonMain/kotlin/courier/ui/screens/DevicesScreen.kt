@@ -181,13 +181,32 @@ fun DevicesScreen(
         Spacer(modifier = Modifier.height(24.dp))
 
         // Paired Devices Section
-        Text(
-            text = "PAIRED DEVICES",
-            color = AccentCyan,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "PAIRED DEVICES",
+                color = AccentCyan,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp
+            )
+
+            if (pairedDevices.any { it.isClipboardSyncEnabled }) {
+                TextButton(onClick = { viewModel.pushClipboard() }) {
+                    Icon(
+                        imageVector = Icons.Default.ContentPaste,
+                        contentDescription = null,
+                        tint = AccentCyan,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Push Clipboard", color = AccentCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(10.dp))
 

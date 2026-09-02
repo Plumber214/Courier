@@ -40,6 +40,14 @@ object AppModule {
         }
     }
 
+    val clipboardSyncManager: courier.link.ClipboardSyncManager by lazy {
+        courier.link.ClipboardSyncManager(
+            linkManager = deviceLinkManager
+        ).apply {
+            start()
+        }
+    }
+
     fun provideHomeViewModel(): HomeViewModel = HomeViewModel(
         downloadManager = downloadManager,
         engine = downloadEngine
@@ -52,6 +60,7 @@ object AppModule {
 
     fun provideDevicesViewModel(): courier.viewmodel.DevicesViewModel {
         linkDownloadBridge // Ensure bridge is active
+        clipboardSyncManager // Ensure clipboard sync is active
         return courier.viewmodel.DevicesViewModel(linkManager = deviceLinkManager)
     }
 }

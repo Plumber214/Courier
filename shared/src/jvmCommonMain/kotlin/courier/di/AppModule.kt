@@ -26,9 +26,7 @@ object AppModule {
     }
 
     val deviceLinkManager: courier.link.DeviceLinkManager by lazy {
-        courier.link.DeviceLinkManager.getInstance().apply {
-            start()
-        }
+        courier.link.DeviceLinkManager.getInstance()
     }
 
     val linkDownloadBridge: courier.link.LinkDownloadBridge by lazy {

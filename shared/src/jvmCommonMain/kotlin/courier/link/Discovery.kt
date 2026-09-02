@@ -33,6 +33,9 @@ class Discovery(
     private val _discoveredDevices = MutableStateFlow<List<DiscoveredDevice>>(emptyList())
     val discoveredDevices: StateFlow<List<DiscoveredDevice>> = _discoveredDevices.asStateFlow()
 
+    private val _isScanning = MutableStateFlow(false)
+    val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
+
     private var udpSocket: DatagramSocket? = null
     private var listenerJob: Job? = null
     private var broadcastJob: Job? = null
@@ -43,33 +46,13 @@ class Discovery(
 
     fun getPublicIdentity(): DeviceIdentity = identityProvider().toGenericPublicIdentity()
 
-    fun start() {
-        startUdpListener()
-        startUdpBroadcaster()
-        startMdns()
-    }
+    /**
+     * Starts listening for incoming UDP discovery broadcasts.
+     * The listener runs while the subsystem is awake (§2.Stage 2.3).
+     */
+    fun startUdpListener() {
+        if (listenerJob?.isActive == true && udpSocket != null && !udpSocket!!.isClosed) return
 
-    fun stop() {
-        listenerJob?.cancel()
-        broadcastJob?.cancel()
-        try {
-            udpSocket?.close()
-        } catch (_: Exception) {}
-        try {
-            jmdns?.unregisterAllServices()
-            jmdns?.close()
-        } catch (_: Exception) {}
-        udpSocket = null
-        jmdns = null
-    }
-
-    fun broadcastNow() {
-        scope.launch {
-            sendUdpBroadcast()
-        }
-    }
-
-    private fun startUdpListener() {
         listenerJob?.cancel()
         listenerJob = scope.launch {
             try {
@@ -116,13 +99,68 @@ class Discovery(
         }
     }
 
-    private fun startUdpBroadcaster() {
+    fun stopUdpListener() {
+        listenerJob?.cancel()
+        listenerJob = null
+        try {
+            udpSocket?.close()
+        } catch (_: Exception) {}
+        udpSocket = null
+        udpRateLimits.clear()
+    }
+
+    /**
+     * Starts active LAN announcements (F5): sends UDP broadcasts every ~1.5s
+     * and runs mDNS while the Devices screen is open.
+     */
+    fun startActiveAnnouncing(intervalMs: Long = 1500L) {
+        startUdpListener() // Ensure listener is running to catch responses
+        _isScanning.value = true
+
         broadcastJob?.cancel()
         broadcastJob = scope.launch {
+            var pruneTick = 0
             while (isActive) {
                 sendUdpBroadcast()
-                delay(10_000L) // Broadcast every 10s
+                pruneTick++
+                if (pruneTick % 5 == 0) {
+                    pruneStaleDiscoveredDevices(60_000L)
+                }
+                delay(intervalMs)
             }
+        }
+        startMdns()
+    }
+
+    fun stopActiveAnnouncing() {
+        broadcastJob?.cancel()
+        broadcastJob = null
+        _isScanning.value = false
+        stopMdns()
+    }
+
+    fun pruneStaleDiscoveredDevices(maxAgeMs: Long = 60_000L) {
+        val now = System.currentTimeMillis()
+        val current = _discoveredDevices.value
+        val filtered = current.filter { now - it.lastSeenEpochMs < maxAgeMs }
+        if (filtered.size != current.size) {
+            _discoveredDevices.value = filtered
+        }
+    }
+
+    fun start() {
+        startUdpListener()
+    }
+
+    fun stop() {
+        stopActiveAnnouncing()
+        stopUdpListener()
+        _discoveredDevices.value = emptyList()
+    }
+
+    fun broadcastNow() {
+        scope.launch {
+            sendUdpBroadcast()
         }
     }
 
@@ -163,6 +201,7 @@ class Discovery(
     }
 
     private fun startMdns() {
+        if (jmdns != null) return
         scope.launch {
             try {
                 val localAddr = getLocalIpAddress()
@@ -206,16 +245,32 @@ class Discovery(
         }
     }
 
-    fun registerDiscoveredDevice(identity: DeviceIdentity, hostAddress: String, tcpPort: Int) {
+    private fun stopMdns() {
+        try {
+            jmdns?.unregisterAllServices()
+            jmdns?.close()
+        } catch (_: Exception) {}
+        jmdns = null
+    }
+
+    fun registerDiscoveredDevice(
+        identity: DeviceIdentity,
+        hostAddress: String,
+        tcpPort: Int,
+        lastSeenEpochMs: Long = System.currentTimeMillis()
+    ) {
         val current = _discoveredDevices.value.toMutableList()
         current.removeAll { it.identity.deviceId == identity.deviceId }
 
-        // Cap discovered devices table (CVE Mitigation §1.4)
+        // Evict by oldest lastSeenEpochMs (Decision F8, §0.8, §2.Stage 2.6)
         if (current.size >= LinkConstants.MAX_DISCOVERED_DEVICES) {
-            current.removeAt(0)
+            current.sortBy { it.lastSeenEpochMs }
+            if (current.isNotEmpty()) {
+                current.removeAt(0)
+            }
         }
 
-        current.add(DiscoveredDevice(identity, hostAddress, tcpPort, System.currentTimeMillis()))
+        current.add(DiscoveredDevice(identity, hostAddress, tcpPort, lastSeenEpochMs))
         _discoveredDevices.value = current
     }
 

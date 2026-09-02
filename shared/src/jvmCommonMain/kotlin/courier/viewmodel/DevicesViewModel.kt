@@ -28,8 +28,14 @@ class DevicesViewModel(
     private val _manualConnectStatus = MutableStateFlow<String?>(null)
     val manualConnectStatus: StateFlow<String?> = _manualConnectStatus.asStateFlow()
 
+    val isScanning: StateFlow<Boolean> = linkManager.discovery.isScanning
+
     private val _showRenameDialog = MutableStateFlow(false)
     val showRenameDialog: StateFlow<Boolean> = _showRenameDialog.asStateFlow()
+
+    fun setDevicesTabActive(active: Boolean) {
+        linkManager.setDevicesTabActive(active)
+    }
 
     fun openRenameDialog() {
         _showRenameDialog.value = true
@@ -45,10 +51,6 @@ class DevicesViewModel(
             linkManager.updateDeviceName(trimmed)
         }
         _showRenameDialog.value = false
-    }
-
-    init {
-        linkManager.start()
     }
 
     fun refreshDiscovery() {

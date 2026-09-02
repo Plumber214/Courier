@@ -45,6 +45,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -84,6 +85,13 @@ fun DevicesScreen(
     viewModel: DevicesViewModel,
     modifier: Modifier = Modifier
 ) {
+    DisposableEffect(Unit) {
+        viewModel.setDevicesTabActive(true)
+        onDispose {
+            viewModel.setDevicesTabActive(false)
+        }
+    }
+
     val scrollState = rememberScrollState()
     val myIdentity by viewModel.myIdentity.collectAsState()
     val showRenameDialog by viewModel.showRenameDialog.collectAsState()
@@ -92,6 +100,7 @@ fun DevicesScreen(
     val connectionStates by viewModel.connectionStates.collectAsState()
     val pairingState by viewModel.pairingState.collectAsState()
     val manualConnectStatus by viewModel.manualConnectStatus.collectAsState()
+    val isScanning by viewModel.isScanning.collectAsState()
 
     var manualIpText by remember { mutableStateOf("") }
     var showManualIpDialog by remember { mutableStateOf(false) }
@@ -343,17 +352,25 @@ fun DevicesScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        color = AccentCyan,
-                        strokeWidth = 2.dp
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = "Scanning LAN for Courier devices...",
-                        color = TextSecondary,
-                        fontSize = 13.sp
-                    )
+                    if (isScanning) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = AccentCyan,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "Broadcasting & scanning LAN for Courier devices...",
+                            color = TextSecondary,
+                            fontSize = 13.sp
+                        )
+                    } else {
+                        Text(
+                            text = "No nearby devices found. Tap Refresh to broadcast and scan.",
+                            color = TextSecondary,
+                            fontSize = 13.sp
+                        )
+                    }
                 }
             }
         } else {

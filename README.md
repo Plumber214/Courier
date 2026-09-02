@@ -6,13 +6,25 @@ Paste a link from **YouTube**, **TikTok**, **Instagram**, or **Facebook** to dow
 
 ---
 
+## What's New in v1.6.0
+
+- **Device Link Polish & Privacy Hardening**:
+  - **Dormancy & On-Demand Scanning (F1, F5)**: Link subsystem is completely dormant with 0 paired devices. Active UDP/mDNS discovery broadcasts run only while the Devices tab is actively open (~1.5s interval), saving battery and eliminating unnecessary network noise.
+  - **Private Friendly Names & Generic Broadcasts (F3, F7)**: Public discovery announces generic names ("Courier device [abcd]"). Private friendly device names are exchanged only over encrypted TLS after pairing and can be renamed anytime.
+  - **Explicit Per-Device Clipboard Send (F2)**: No background polling or surprise syncs. Tap "Send" on any paired device card to push your clipboard directly, with immediate confirmation banners identifying the sender.
+  - **Bound Android Foreground Service (F4)**: Foreground notification appears on Android only while devices are paired (or an active download runs) and clears when unpaired. Tapping the notification opens the Devices tab directly.
+  - **Honest Offline States & Last-Seen Timestamps (F6, F8)**: Paired devices display friendly names and relative last-seen times while offline. Recently disconnected/dozing phones display an honest `ASLEEP` status ("Asleep — will deliver on wake").
+  - **Hardened Outbox**: Delivery retries are strictly bounded by maximum attempt caps with monotonic sequence generator seeding from persisted state.
+  - **Local LAN-Only Scope (F6)**: Device Link operates exclusively on your local network/Wi-Fi subnet with mutual certificate pinning.
+
+---
+
 ## What's New in v1.5.0
 
 - **Device Link (Local LAN Sync)**:
   - **Zero-Config Discovery**: Automatic local network discovery over UDP broadcast (port 1816) with JmDNS (`_courier._tcp.local.`) fallback and manual IP connection.
   - **Cryptographic Trust & Pairing**: End-to-end TLS encryption with mutual certificate pinning and an 8-character verification code for instant, secure pairing.
   - **Remote Downloads**: Send video and audio download requests from your phone straight to your desktop PC, with real-time status, progress, speed, and ETA streaming back to your phone.
-  - **Clipboard Sync**: Share copied links and text across paired devices with deduplication loops prevention and per-device toggle controls.
   - **Close-to-Tray on Desktop**: Desktop app runs quietly in the system tray so Device Link remains available in the background.
 - **Palette Retint**:
   - Replaced the purple accent palette with a sophisticated steel blue-gray (`#7D9BB8`) and slate (`#8FA8B8`) over a clean neutral dark foundation (`#0E1116`), creating a refined studio workstation aesthetic.

@@ -89,13 +89,13 @@ class DownloadManager(
 
     fun enqueueDownload(
         url: String,
-        videoInfo: VideoInfo?,
-        format: VideoFormat?,
-        isAudioOnly: Boolean,
+        videoInfo: VideoInfo? = null,
+        format: VideoFormat? = null,
+        isAudioOnly: Boolean = false,
         destinationDir: String? = null,
         mediaType: MediaType = videoInfo?.mediaType ?: (if (isAudioOnly) MediaType.AUDIO else MediaType.VIDEO),
         selectedGalleryIndices: List<Int> = emptyList()
-    ) {
+    ): String {
         val platform = videoInfo?.platform ?: Platform.fromUrl(url)
         val title = videoInfo?.title?.ifBlank { null } ?: when (mediaType) {
             MediaType.GALLERY -> "${platform.displayName} Gallery"
@@ -149,6 +149,7 @@ class DownloadManager(
 
         repository.addOrUpdate(item)
         triggerQueueProcessing()
+        return id
     }
 
     fun cancelDownload(id: String) {

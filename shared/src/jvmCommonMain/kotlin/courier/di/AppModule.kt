@@ -25,6 +25,21 @@ object AppModule {
         )
     }
 
+    val deviceLinkManager: courier.link.DeviceLinkManager by lazy {
+        courier.link.DeviceLinkManager.getInstance().apply {
+            start()
+        }
+    }
+
+    val linkDownloadBridge: courier.link.LinkDownloadBridge by lazy {
+        courier.link.LinkDownloadBridge(
+            linkManager = deviceLinkManager,
+            downloadManager = downloadManager
+        ).apply {
+            start()
+        }
+    }
+
     fun provideHomeViewModel(): HomeViewModel = HomeViewModel(
         downloadManager = downloadManager,
         engine = downloadEngine
@@ -35,5 +50,8 @@ object AppModule {
         binaryManager = binaryManager
     )
 
-    fun provideDevicesViewModel(): courier.viewmodel.DevicesViewModel = courier.viewmodel.DevicesViewModel()
+    fun provideDevicesViewModel(): courier.viewmodel.DevicesViewModel {
+        linkDownloadBridge // Ensure bridge is active
+        return courier.viewmodel.DevicesViewModel(linkManager = deviceLinkManager)
+    }
 }

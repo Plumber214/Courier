@@ -50,7 +50,17 @@ kotlin {
             }
         }
 
+        val jvmCommonMain by creating {
+            dependsOn(commonMain)
+            dependencies {
+                implementation(libs.bcpkix.jdk18on)
+                implementation(libs.bcprov.jdk18on)
+                implementation(libs.jmdns)
+            }
+        }
+
         val androidMain by getting {
+            dependsOn(jvmCommonMain)
             dependencies {
                 implementation(libs.kotlinx.coroutines.android)
                 implementation(libs.androidx.core.ktx)
@@ -62,6 +72,7 @@ kotlin {
         }
 
         val desktopMain by getting {
+            dependsOn(jvmCommonMain)
             dependencies {
                 implementation(compose.desktop.currentOs)
                 implementation(libs.kotlinx.coroutines.swing)
@@ -87,6 +98,13 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = true
+        }
+        resources {
+            excludes += listOf(
+                "META-INF/versions/9/OSGI-INF/MANIFEST.MF",
+                "META-INF/INDEX.LIST",
+                "META-INF/io.netty.versions.properties"
+            )
         }
     }
 

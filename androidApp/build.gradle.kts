@@ -31,6 +31,13 @@ android {
         jniLibs {
             useLegacyPackaging = true
         }
+        resources {
+            excludes += listOf(
+                "META-INF/versions/9/OSGI-INF/MANIFEST.MF",
+                "META-INF/INDEX.LIST",
+                "META-INF/io.netty.versions.properties"
+            )
+        }
     }
 
     buildTypes {

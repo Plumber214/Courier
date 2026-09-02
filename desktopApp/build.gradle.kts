@@ -18,8 +18,8 @@ dependencies {
     implementation(compose.foundation)
     implementation(compose.ui)
     implementation(libs.kotlinx.coroutines.swing)
-    implementation("net.java.dev.jna:jna:5.14.0")
-    implementation("net.java.dev.jna:jna-platform:5.14.0")
+    implementation(libs.jna)
+    implementation(libs.jna.platform)
 }
 
 val courierVersion: String = providers.gradleProperty("courier.versionName").get()

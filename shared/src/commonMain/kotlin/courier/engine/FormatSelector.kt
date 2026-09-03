@@ -85,6 +85,56 @@ object FormatSelector {
     }
 
     /**
+     * The quality preset to use for a request that arrived from another device.
+     *
+     * Returns null for "no ceiling — best available", or one of the named
+     * presets. Never returns the hint itself.
+     *
+     * Two reasons it is normalised rather than passed through:
+     *
+     * 1. **A format id is not portable.** The sender's ladder came from its own
+     *    yt-dlp run, with its own cookies and client. Format `137` there may not
+     *    exist here, and applying it verbatim would fail or silently select
+     *    something else. What travels between devices is the *intent* — "1080p"
+     *    — and the receiver resolves that against what it can actually see.
+     *
+     * 2. **[videoFormatArg] passes any hint containing `+` or `/` straight
+     *    through as a yt-dlp format expression.** That is not shell injection
+     *    (arguments are passed as a list, never through a shell), but it would
+     *    let a paired device choose the receiver's selection expression. Pairing
+     *    is consent to accept downloads, not to drive the engine.
+     */
+    fun presetForRemoteHint(hint: String?): String? {
+        val raw = hint?.trim()?.lowercase() ?: return null
+        if (raw.isEmpty() || raw == "best" || raw == "highest") return null
+
+        // "1920x1080" states width first, so the height is the second component.
+        // Taking the largest number instead would read 1920 as the height and
+        // treat a 1080p request as uncapped.
+        val dimensions = Regex("""(\d{2,5})\s*[x×]\s*(\d{2,5})""").find(raw)
+        val height = if (dimensions != null) {
+            dimensions.groupValues[2].toIntOrNull()
+        } else {
+            // "1080p", "hd1080", "1080", "1080p60" — the frame rate in the last
+            // of those is excluded by the lower bound.
+            Regex("""\d{3,5}""").findAll(raw)
+                .mapNotNull { it.value.toIntOrNull() }
+                .filter { it in 100..10_000 }
+                .maxOrNull()
+        } ?: return null
+
+        // Above the highest preset there is no ceiling worth applying: the
+        // sender asked for more than any preset expresses.
+        if (height > 1080) return null
+
+        return PRESET_HEIGHTS.entries
+            .filter { it.value <= height }
+            .maxByOrNull { it.value }
+            ?.key
+            ?: PRESET_HEIGHTS.entries.minByOrNull { it.value }?.key
+    }
+
+    /**
      * Container to merge into before any re-encode.
      *
      * When a re-encode will follow, this deliberately differs from the recode

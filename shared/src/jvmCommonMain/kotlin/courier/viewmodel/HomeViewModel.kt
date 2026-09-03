@@ -177,7 +177,10 @@ class HomeViewModel(
             courier.di.AppModule.deviceLinkManager.sendDownloadRequest(
                 targetDeviceId = targetDeviceId,
                 url = url,
-                formatHint = format?.formatId ?: format?.resolution,
+                // Resolution first, format id only as a fallback. The id came
+                // from this device's own yt-dlp run and may name nothing on the
+                // other device; the resolution is the part that travels.
+                formatHint = format?.resolution ?: format?.formatId,
                 audioOnly = isAudioOnly
             )
         }

@@ -8,6 +8,7 @@ import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.provider.DocumentsContract
 import android.util.Log
 import androidx.core.content.FileProvider
 import java.io.File
@@ -66,18 +67,62 @@ class PlatformActionsAndroid : PlatformActions {
         }
     }
 
+    /**
+     * Opens [folderPath] in the system file browser.
+     *
+     * This used to discard its argument entirely and always target the public
+     * Downloads directory, so a custom destination opened the wrong place. It
+     * also passed a bare filesystem path as the intent data, which modern
+     * Android does not resolve, so in practice the button usually did nothing
+     * and reported nothing.
+     *
+     * A document-tree URI is what the Files app actually understands. If
+     * nothing on the device claims it, this returns false rather than
+     * pretending it worked — the caller then falls back to opening the file.
+     */
     override fun openFolder(folderPath: String): Boolean {
-        return try {
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(Uri.parse(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).path), "*/*")
+        val requested = File(folderPath)
+        // Callers pass an output file path as often as a directory.
+        val target = if (requested.isFile) requested.parentFile else requested
+        if (target == null) return false
+
+        val externalRoot = Environment.getExternalStorageDirectory().absolutePath
+        val absolute = target.absolutePath
+
+        val intents = mutableListOf<Intent>()
+
+        if (absolute.startsWith(externalRoot)) {
+            val relative = absolute.removePrefix(externalRoot).trim('/')
+            val documentId = if (relative.isEmpty()) "primary:" else "primary:$relative"
+            val treeUri = DocumentsContract.buildDocumentUri(
+                "com.android.externalstorage.documents",
+                documentId
+            )
+            intents += Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(treeUri, DocumentsContract.Document.MIME_TYPE_DIR)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            context.startActivity(intent)
-            true
-        } catch (e: Exception) {
-            Log.e("Courier", "Failed to open folder: $folderPath", e)
-            false
         }
+
+        // Some file managers register for this instead.
+        intents += Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(Uri.fromFile(target), "resource/folder")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+
+        for (intent in intents) {
+            if (intent.resolveActivity(context.packageManager) == null) continue
+            try {
+                context.startActivity(intent)
+                return true
+            } catch (e: Exception) {
+                Log.w("Courier", "Folder intent rejected for $absolute", e)
+            }
+        }
+
+        Log.w("Courier", "No activity available to browse $absolute")
+        return false
     }
 
     override fun deleteFile(filePath: String): Boolean {

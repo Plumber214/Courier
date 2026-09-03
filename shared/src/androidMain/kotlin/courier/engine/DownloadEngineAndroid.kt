@@ -62,6 +62,9 @@ class DownloadEngineAndroid : DownloadEngine {
             val request = YoutubeDLRequest(url)
             request.addOption("--dump-single-json")
             request.addOption("--no-warnings")
+            // Describe the video the user pasted, not the playlist it happens
+            // to sit inside.
+            request.addOption("--no-playlist")
             request.addOption("--no-check-certificates")
             request.addOption("--ignore-no-formats-error")
             request.addOption("--add-header", "User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36")
@@ -130,11 +133,16 @@ class DownloadEngineAndroid : DownloadEngine {
 
             fun newRequest(): YoutubeDLRequest {
                 val r = YoutubeDLRequest(item.url)
-                if (isGallery) {
+                if (isGallery || item.downloadPlaylist) {
+                    // Numbered, so a playlist keeps its order and two videos
+                    // with the same title do not overwrite each other.
                     r.addOption("-o", "${outDir.absolutePath}/%(title).80s_%(playlist_index)s.%(ext)s")
                 } else {
                     r.addOption("-o", "${outDir.absolutePath}/%(title).100s.%(ext)s")
                 }
+                // A link copied from inside a playlist carries "list=", and
+                // yt-dlp would otherwise download every video in it.
+                r.addOption(if (item.downloadPlaylist) "--yes-playlist" else "--no-playlist")
                 r.addOption("--no-mtime")
                 r.addOption("--windows-filenames")
                 r.addOption("--no-check-certificates")

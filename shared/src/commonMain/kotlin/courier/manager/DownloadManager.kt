@@ -94,7 +94,8 @@ class DownloadManager(
         isAudioOnly: Boolean = false,
         destinationDir: String? = null,
         mediaType: MediaType = videoInfo?.mediaType ?: (if (isAudioOnly) MediaType.AUDIO else MediaType.VIDEO),
-        selectedGalleryIndices: List<Int> = emptyList()
+        selectedGalleryIndices: List<Int> = emptyList(),
+        downloadPlaylist: Boolean = false
     ): String {
         val platform = videoInfo?.platform ?: Platform.fromUrl(url)
         val title = videoInfo?.title?.ifBlank { null } ?: when (mediaType) {
@@ -144,7 +145,8 @@ class DownloadManager(
             transcodeCodec = settings.value.transcodeCodec,
             selectedVcodec = format?.vcodec,
             formatId = format?.formatId,
-            destinationDir = destinationDir
+            destinationDir = destinationDir,
+            downloadPlaylist = downloadPlaylist
         )
 
         repository.addOrUpdate(item)

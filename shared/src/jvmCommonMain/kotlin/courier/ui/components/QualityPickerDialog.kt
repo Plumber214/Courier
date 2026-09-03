@@ -29,8 +29,11 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.RadioButton
@@ -83,11 +86,23 @@ fun QualityPickerDialog(
     pairedDevices: List<courier.link.PairedDevice> = emptyList(),
     onSendToDevice: ((targetDeviceId: String, format: VideoFormat?, isAudioOnly: Boolean) -> Unit)? = null,
     onDismiss: () -> Unit,
-    onConfirm: (format: VideoFormat?, isAudioOnly: Boolean, destinationDir: String?) -> Unit
+    onConfirm: (
+        format: VideoFormat?,
+        isAudioOnly: Boolean,
+        destinationDir: String?,
+        downloadPlaylist: Boolean
+    ) -> Unit
 ) {
     val initialAudioOnly = defaultQuality == "audio_only"
     var isAudioOnly by remember { mutableStateOf(initialAudioOnly) }
     var selectedLocation by remember { mutableStateOf(defaultDownloadDir) }
+
+    // A link copied from inside a playlist. Default is this video only; the
+    // whole playlist is available but has to be asked for.
+    val playlistId = remember(videoInfo.url) {
+        courier.engine.UrlValidator.playlistIdOf(videoInfo.url)
+    }
+    var downloadPlaylist by remember(playlistId) { mutableStateOf(false) }
 
     val isVideoLike = videoInfo.mediaType == courier.model.MediaType.VIDEO || videoInfo.mediaType == courier.model.MediaType.AUDIO
     val videoFormats = remember(videoInfo) {
@@ -515,6 +530,61 @@ fun QualityPickerDialog(
                     }
                 }
 
+                if (playlistId != null) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                if (downloadPlaylist) WarningOrange.copy(alpha = 0.16f) else SurfaceCard,
+                                RoundedCornerShape(10.dp)
+                            )
+                            .border(
+                                1.dp,
+                                if (downloadPlaylist) WarningOrange.copy(alpha = 0.7f) else CardBorderDark,
+                                RoundedCornerShape(10.dp)
+                            )
+                            .toggleable(
+                                value = downloadPlaylist,
+                                role = Role.Checkbox,
+                                onValueChange = { downloadPlaylist = it }
+                            )
+                            .padding(horizontal = 10.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = downloadPlaylist,
+                            onCheckedChange = { downloadPlaylist = it },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = WarningOrange,
+                                uncheckedColor = TextMuted,
+                                checkmarkColor = Color.Black
+                            ),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "This link is part of a playlist",
+                                color = TextPrimary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = if (downloadPlaylist) {
+                                    "Every video in the playlist will be downloaded at this quality."
+                                } else {
+                                    "Only this video will be downloaded. Tick to get the whole playlist."
+                                },
+                                color = if (downloadPlaylist) WarningOrange else TextMuted,
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp
+                            )
+                        }
+                    }
+                }
+
                 if (pairedDevices.isNotEmpty() && onSendToDevice != null) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
@@ -580,7 +650,14 @@ fun QualityPickerDialog(
                     }
 
                     Button(
-                        onClick = { onConfirm(selectedFormat, isAudioOnly, selectedLocation.ifBlank { null }) },
+                        onClick = {
+                            onConfirm(
+                                selectedFormat,
+                                isAudioOnly,
+                                selectedLocation.ifBlank { null },
+                                downloadPlaylist
+                            )
+                        },
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = PrimaryIndigo,

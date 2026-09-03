@@ -35,6 +35,10 @@ class DownloadEngineDesktop : DownloadEngine {
             ytDlp.absolutePath,
             "--dump-single-json",
             "--no-warnings",
+            // Describe the video the user pasted, not the playlist it happens
+            // to sit inside. Without this, a "watch?v=…&list=…" link analyses
+            // as the whole playlist.
+            "--no-playlist",
             "--ignore-no-formats-error",
             "--extractor-args", "youtube:player_client=android,web;player_skip=configs,webpage"
         )
@@ -115,7 +119,9 @@ class DownloadEngineDesktop : DownloadEngine {
         }
 
         val isGallery = item.mediaType == MediaType.GALLERY || item.selectedGalleryIndices.isNotEmpty()
-        val outputTemplate = if (isGallery) {
+        val outputTemplate = if (isGallery || item.downloadPlaylist) {
+            // Numbered, so a playlist keeps its order and two videos with the
+            // same title do not overwrite each other.
             File(outDir, "%(title).80s_%(playlist_index)s.%(ext)s").absolutePath
         } else {
             File(outDir, "%(title).100s.%(ext)s").absolutePath
@@ -131,6 +137,9 @@ class DownloadEngineDesktop : DownloadEngine {
             "--no-mtime",
             "--windows-filenames",
             "--concurrent-fragments", "5",
+            // A link copied from inside a playlist carries "list=", and yt-dlp
+            // would otherwise download every video in it.
+            if (item.downloadPlaylist) "--yes-playlist" else "--no-playlist",
             "-o", outputTemplate
         )
 

@@ -111,6 +111,17 @@ fun HomeScreen(
         downloadManager.binaryManager.ensureBinariesReady()
     }
 
+    // A link shared into Courier from another app. Keyed on the pending value
+    // rather than Unit, so a second share into an already-running app is picked
+    // up too — the failure the clipboard route had.
+    val pendingSharedLink by courier.share.IncomingLinks.pending.collectAsState()
+    LaunchedEffect(pendingSharedLink) {
+        val shared = courier.share.IncomingLinks.consume()
+        if (shared != null) {
+            homeViewModel.acceptSharedUrl(shared)
+        }
+    }
+
     val activeCount = downloads.count { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.MERGING }
     val queuedCount = downloads.count { it.status == DownloadStatus.QUEUED }
     val completedCount = downloads.count { it.status == DownloadStatus.COMPLETED }
@@ -648,8 +659,13 @@ fun HomeScreen(
                             homeViewModel.sendToRemoteDevice(targetDeviceId, format, isAudioOnly)
                         },
                         onDismiss = homeViewModel::dismissQualityPicker,
-                        onConfirm = { format, isAudioOnly, destinationDir ->
-                            homeViewModel.confirmDownload(format, isAudioOnly, destinationDir)
+                        onConfirm = { format, isAudioOnly, destinationDir, downloadPlaylist ->
+                            homeViewModel.confirmDownload(
+                                format = format,
+                                isAudioOnly = isAudioOnly,
+                                destinationDir = destinationDir,
+                                downloadPlaylist = downloadPlaylist
+                            )
                         }
                     )
                 }

@@ -7,7 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import courier.engine.UrlValidator
 import courier.platform.AppContextHolder
-import courier.platform.getPlatformActions
+import courier.share.IncomingLinks
 import courier.ui.App
 
 class MainActivity : ComponentActivity() {
@@ -50,7 +50,12 @@ class MainActivity : ComponentActivity() {
             if (!sharedText.isNullOrBlank()) {
                 val extracted = UrlValidator.extractUrl(sharedText)
                 if (!extracted.isNullOrBlank()) {
-                    getPlatformActions().setClipboardText(extracted)
+                    // Explicit state, not the clipboard. The old route wrote the
+                    // link to the clipboard and depended on a one-shot effect in
+                    // HomeScreen to notice it — which does not re-run on
+                    // onNewIntent, so sharing into a running Courier silently
+                    // did nothing except clobber what the user had copied.
+                    IncomingLinks.offer(extracted)
                 }
             }
         }

@@ -86,6 +86,25 @@ class HomeViewModel(
         analyzeUrl(detected)
     }
 
+    /**
+     * Handles a link shared into Courier from another app.
+     *
+     * Goes straight to analysis: the user already expressed intent by choosing
+     * Courier from the share sheet, so asking them to confirm a banner as well
+     * would be asking twice.
+     */
+    fun acceptSharedUrl(sharedUrl: String) {
+        val clean = UrlValidator.cleanUrl(sharedUrl)
+        if (clean.isBlank()) return
+        _uiState.value = _uiState.value.copy(
+            inputUrl = clean,
+            showClipboardBanner = false,
+            detectedClipboardUrl = null,
+            analysisError = null
+        )
+        analyzeUrl(clean)
+    }
+
     fun dismissClipboardBanner() {
         lastDismissedClipboardUrl = _uiState.value.detectedClipboardUrl
         _uiState.value = _uiState.value.copy(
@@ -140,7 +159,8 @@ class HomeViewModel(
         isAudioOnly: Boolean,
         destinationDir: String? = null,
         mediaType: MediaType = _uiState.value.previewInfo?.mediaType ?: (if (isAudioOnly) MediaType.AUDIO else MediaType.VIDEO),
-        selectedGalleryIndices: List<Int> = emptyList()
+        selectedGalleryIndices: List<Int> = emptyList(),
+        downloadPlaylist: Boolean = false
     ) {
         val info = _uiState.value.previewInfo
         val url = info?.url ?: _uiState.value.inputUrl
@@ -153,7 +173,8 @@ class HomeViewModel(
             isAudioOnly = isAudioOnly,
             destinationDir = destinationDir,
             mediaType = mediaType,
-            selectedGalleryIndices = selectedGalleryIndices
+            selectedGalleryIndices = selectedGalleryIndices,
+            downloadPlaylist = downloadPlaylist
         )
 
         _uiState.value = _uiState.value.copy(

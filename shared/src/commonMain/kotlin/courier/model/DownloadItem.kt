@@ -45,7 +45,17 @@ data class DownloadItem(
     val destinationDir: String? = null,
     val outputPaths: List<String> = emptyList(),
     val partialPath: String? = null,
-    val resumeAttempts: Int = 0
+    val resumeAttempts: Int = 0,
+
+    /**
+     * Whether to expand a `list=` link into every video in the playlist.
+     *
+     * Defaults to false, so copying a video from inside a playlist — the normal
+     * case on YouTube — downloads that one video. yt-dlp's own default is the
+     * opposite, which turned one intended download into dozens with no warning
+     * and no per-item quality choice.
+     */
+    val downloadPlaylist: Boolean = false
 ) {
     val isFinished: Boolean
         get() = status == DownloadStatus.COMPLETED || status == DownloadStatus.FAILED || status == DownloadStatus.CANCELLED

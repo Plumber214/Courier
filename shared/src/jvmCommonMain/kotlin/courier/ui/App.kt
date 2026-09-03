@@ -26,6 +26,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,6 +64,16 @@ fun App(initialTab: AppTab = AppTab.DOWNLOADS) {
 
     var selectedTab by rememberSaveable { mutableStateOf(initialTab) }
     val isAndroid = remember { getPlatformActions().isAndroid() }
+
+    // A shared link has to reach the Downloads tab to be acted on, and the user
+    // may well have been on Settings or Devices when they shared. Observed here
+    // rather than in HomeScreen because this composable is always present.
+    val pendingSharedLink by courier.share.IncomingLinks.pending.collectAsState()
+    LaunchedEffect(pendingSharedLink) {
+        if (pendingSharedLink != null) {
+            selectedTab = AppTab.DOWNLOADS
+        }
+    }
 
     CourierTheme {
         Surface(

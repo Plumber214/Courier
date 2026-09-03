@@ -77,6 +77,7 @@ class FakeTestBinaryManager : BinaryManager {
     override val downloadProgress: StateFlow<Float> = MutableStateFlow(1f)
     override val statusMessage: StateFlow<String> = MutableStateFlow("Ready")
     override val errorMessage: StateFlow<String?> = MutableStateFlow(null)
+    override val isMergerAvailable: StateFlow<Boolean> = MutableStateFlow(true)
 
     override suspend fun ensureBinariesReady(): Result<Unit> = Result.success(Unit)
     override suspend fun updateBinaries(): Result<String> = Result.success("Updated")

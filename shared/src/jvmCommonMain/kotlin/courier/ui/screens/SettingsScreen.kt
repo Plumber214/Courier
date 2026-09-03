@@ -78,6 +78,7 @@ import courier.model.OutputProfile
 import courier.model.TranscodeCodec
 import courier.ui.theme.TextMuted
 import courier.ui.theme.TextPrimary
+import courier.ui.theme.WarningOrange
 import courier.ui.theme.TextSecondary
 import courier.util.AppVersion
 import courier.viewmodel.SettingsViewModel
@@ -800,6 +801,45 @@ fun SettingsScreen(
                                     ) {
                                         Text("Restart & Apply", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     }
+                                }
+                            }
+                        }
+                        is courier.update.AppUpdateState.ManualUpdateRequired -> {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(WarningOrange.copy(alpha = 0.14f), RoundedCornerShape(10.dp))
+                                    .border(1.dp, WarningOrange.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                                    .padding(12.dp)
+                            ) {
+                                Text(
+                                    text = "Version ${st.latestVersion} is available",
+                                    color = TextPrimary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = st.reason,
+                                    color = TextSecondary,
+                                    fontSize = 11.sp,
+                                    lineHeight = 16.sp
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .background(SurfaceVariantDark, RoundedCornerShape(8.dp))
+                                        .border(1.dp, CardBorderDark, RoundedCornerShape(8.dp))
+                                        .clickable { getPlatformActions().setClipboardText(st.releaseUrl) }
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        "Copy release link",
+                                        color = AccentCyan,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
                             }
                         }

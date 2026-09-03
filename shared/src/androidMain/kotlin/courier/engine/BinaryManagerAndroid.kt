@@ -26,6 +26,11 @@ class BinaryManagerAndroid : BinaryManager {
     private val _errorMessage = MutableStateFlow<String?>(null)
     override val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
+    // FFmpeg ships inside the APK via youtubedl-android-ffmpeg, so there is no
+    // download to fail and nothing to verify.
+    private val _isMergerAvailable = MutableStateFlow(true)
+    override val isMergerAvailable: StateFlow<Boolean> = _isMergerAvailable.asStateFlow()
+
     override suspend fun ensureBinariesReady(): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             if (AppContextHolder.isInitialized) {

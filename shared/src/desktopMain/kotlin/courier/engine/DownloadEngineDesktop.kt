@@ -35,7 +35,6 @@ class DownloadEngineDesktop : DownloadEngine {
             ytDlp.absolutePath,
             "--dump-single-json",
             "--no-warnings",
-            "--no-check-certificates",
             "--ignore-no-formats-error",
             "--extractor-args", "youtube:player_client=android,web;player_skip=configs,webpage"
         )
@@ -131,7 +130,6 @@ class DownloadEngineDesktop : DownloadEngine {
             "--progress-template", progressTemplate,
             "--no-mtime",
             "--windows-filenames",
-            "--no-check-certificates",
             "--concurrent-fragments", "5",
             "-o", outputTemplate
         )

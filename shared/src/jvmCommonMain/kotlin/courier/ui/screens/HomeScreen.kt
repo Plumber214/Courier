@@ -79,6 +79,7 @@ import courier.ui.theme.SurfaceVariantDark
 import courier.ui.theme.TextMuted
 import courier.ui.theme.TextPrimary
 import courier.ui.theme.TextSecondary
+import courier.ui.theme.WarningOrange
 import courier.viewmodel.HomeViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -98,6 +99,7 @@ fun HomeScreen(
 
     // Binary manager states
     val isBinaryReady by downloadManager.binaryManager.isReady.collectAsState()
+    val isMergerAvailable by downloadManager.binaryManager.isMergerAvailable.collectAsState()
     val isBinaryDownloading by downloadManager.binaryManager.isDownloading.collectAsState()
     val binaryProgress by downloadManager.binaryManager.downloadProgress.collectAsState()
     val binaryStatusMsg by downloadManager.binaryManager.statusMessage.collectAsState()
@@ -292,6 +294,53 @@ fun HomeScreen(
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
                         )
+                    }
+                }
+            }
+
+            // Missing merger notice.
+            //
+            // Without FFmpeg, progressive downloads still work but merged
+            // video+audio and audio extraction fail. Reporting "Engine Ready"
+            // and letting the user find out mid-download is what this replaces.
+            if (isBinaryReady && !isMergerAvailable && !isBinaryDownloading) {
+                Spacer(modifier = Modifier.height(14.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(WarningOrange.copy(alpha = 0.13f), RoundedCornerShape(12.dp))
+                        .border(1.dp, WarningOrange.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = WarningOrange,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = binaryErrorMsg
+                            ?: "FFmpeg is missing. High-quality merged video and audio extraction will fail.",
+                        color = WarningOrange,
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Box(
+                        modifier = Modifier
+                            .background(SurfaceVariantDark, RoundedCornerShape(8.dp))
+                            .border(1.dp, CardBorderDark, RoundedCornerShape(8.dp))
+                            .clickable {
+                                coroutineScope.launch {
+                                    downloadManager.binaryManager.ensureBinariesReady()
+                                }
+                            }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text("Retry", color = AccentCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }

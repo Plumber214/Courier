@@ -1,6 +1,7 @@
 package courier.update
 
 import courier.data.SettingsRepository
+import courier.security.FileChecksum
 import courier.util.AppVersion
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +41,17 @@ sealed interface AppUpdateState {
         val latestVersion: String,
         val releaseNotes: String,
         val stagedFilePath: String
+    ) : AppUpdateState
+    /**
+     * A newer version exists, but this installation cannot replace itself in
+     * place — it was installed from the MSI/EXE distribution, whose jars are
+     * managed by the installer.
+     */
+    data class ManualUpdateRequired(
+        val latestVersion: String,
+        val releaseNotes: String,
+        val reason: String,
+        val releaseUrl: String
     ) : AppUpdateState
     data class UpToDate(
         val version: String,
@@ -101,35 +113,81 @@ class AppUpdateManager(
                 val latestVer = SemanticVersion.parse(tagName)
 
                 if (currentVer != null && latestVer != null && latestVer > currentVer) {
+                    val releaseUrl = parsed["html_url"]?.jsonPrimitive?.content
+                        ?: "https://github.com/$GITHUB_REPO/releases/latest"
+
+                    // An install that cannot replace itself should not download
+                    // 100 MB to discover that at the end.
+                    val blocker = inPlaceUpdateBlocker()
+                    if (blocker != null) {
+                        _updateState.value = AppUpdateState.ManualUpdateRequired(
+                            latestVersion = latestVer.toString(),
+                            releaseNotes = body,
+                            reason = blocker,
+                            releaseUrl = releaseUrl
+                        )
+                        return@launch
+                    }
+
                     var downloadUrl = ""
                     var assetName = ""
                     var sizeBytes = 0L
+                    var sumsUrl: String? = null
 
                     for (assetElem in assets) {
                         val obj = assetElem.jsonObject
                         val name = obj["name"]?.jsonPrimitive?.content ?: ""
-                        if (name.endsWith(".jar", ignoreCase = true) || name.endsWith(".zip", ignoreCase = true)) {
-                            downloadUrl = obj["browser_download_url"]?.jsonPrimitive?.content ?: ""
+                        val url = obj["browser_download_url"]?.jsonPrimitive?.content ?: ""
+
+                        if (isChecksumAsset(name)) {
+                            sumsUrl = url
+                            continue
+                        }
+                        // Match the artifact this updater actually knows how to
+                        // apply, rather than the first .jar/.zip in the list.
+                        if (downloadUrl.isBlank() &&
+                            name.startsWith("Courier-Desktop", ignoreCase = true) &&
+                            name.endsWith(".jar", ignoreCase = true)
+                        ) {
+                            downloadUrl = url
                             assetName = name
                             sizeBytes = obj["size"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
-                            break
                         }
                     }
 
-                    if (downloadUrl.isNotBlank()) {
-                        _updateState.value = AppUpdateState.UpdateAvailable(
-                            currentVersion = AppVersion.VERSION_NAME,
+                    if (downloadUrl.isBlank()) {
+                        _updateState.value = AppUpdateState.Error(
+                            "Release ${latestVer} has no desktop jar to install", now
+                        )
+                        return@launch
+                    }
+
+                    if (sumsUrl == null) {
+                        // Refuse rather than stage something unverifiable. This
+                        // artifact gets copied over the running application and
+                        // executed; "no checksum published" is not a pass.
+                        _updateState.value = AppUpdateState.ManualUpdateRequired(
                             latestVersion = latestVer.toString(),
                             releaseNotes = body,
-                            downloadUrl = downloadUrl,
-                            assetName = assetName,
-                            sizeBytes = sizeBytes
+                            reason = "Release ${latestVer} publishes no checksum file, so the " +
+                                "download cannot be verified before it replaces this install.",
+                            releaseUrl = releaseUrl
                         )
-
-                        downloadAndStageUpdate(latestVer.toString(), body, downloadUrl, assetName, sizeBytes)
-                    } else {
-                        _updateState.value = AppUpdateState.UpToDate(AppVersion.VERSION_NAME, now)
+                        return@launch
                     }
+
+                    _updateState.value = AppUpdateState.UpdateAvailable(
+                        currentVersion = AppVersion.VERSION_NAME,
+                        latestVersion = latestVer.toString(),
+                        releaseNotes = body,
+                        downloadUrl = downloadUrl,
+                        assetName = assetName,
+                        sizeBytes = sizeBytes
+                    )
+
+                    downloadAndStageUpdate(
+                        latestVer.toString(), body, downloadUrl, assetName, sizeBytes, sumsUrl
+                    )
                 } else {
                     _updateState.value = AppUpdateState.UpToDate(AppVersion.VERSION_NAME, now)
                 }
@@ -139,12 +197,60 @@ class AppUpdateManager(
         }
     }
 
+    /**
+     * Why this installation cannot replace its own files, or null if it can.
+     *
+     * The uber jar is self-contained and can be overwritten in place. The
+     * MSI/EXE distribution is not: `codeSource.location` there points at one
+     * dependency jar inside jpackage's `app/` directory, and copying the uber
+     * jar over it produces a broken installation rather than an updated one.
+     * That distribution is the one the README recommends first.
+     */
+    private fun inPlaceUpdateBlocker(): String? {
+        val isWindows = System.getProperty("os.name")?.lowercase()?.contains("win") == true
+        if (!isWindows) {
+            return "Automatic updates are only implemented for Windows."
+        }
+
+        val running = runningArtifact()
+            ?: return "Courier is running from loose classes rather than a jar."
+
+        if (!running.name.endsWith(".jar", ignoreCase = true)) {
+            return "Courier is not running from a jar."
+        }
+
+        // jpackage lays out <install>/app/*.jar beside <install>/runtime.
+        val parent = running.parentFile
+        if (parent != null && parent.name.equals("app", ignoreCase = true) &&
+            File(parent.parentFile, "runtime").isDirectory
+        ) {
+            return "This copy was installed from the Windows installer, which manages its own " +
+                "files. Download the new installer to update."
+        }
+
+        return null
+    }
+
+    private fun runningArtifact(): File? = try {
+        AppUpdateManager::class.java.protectionDomain?.codeSource?.location
+            ?.toURI()?.let { File(it) }?.takeIf { it.exists() }
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun isChecksumAsset(name: String): Boolean {
+        val n = name.lowercase()
+        return n == "sha256sums" || n == "sha2-256sums" || n == "checksums.sha256" ||
+            n.endsWith(".sha256")
+    }
+
     private suspend fun downloadAndStageUpdate(
         version: String,
         notes: String,
         downloadUrlStr: String,
         assetName: String,
-        sizeBytes: Long
+        sizeBytes: Long,
+        sumsUrl: String
     ) {
         val updateDir = getUpdateStagingDir()
         if (!updateDir.exists()) updateDir.mkdirs()
@@ -216,15 +322,48 @@ class AppUpdateManager(
                 }
             }
 
-            if (stagedFile.length() > 0) {
-                _updateState.value = AppUpdateState.UpdateReady(
-                    latestVersion = version,
-                    releaseNotes = notes,
-                    stagedFilePath = stagedFile.absolutePath
+            if (stagedFile.length() <= 0) {
+                stagedFile.delete()
+                _updateState.value = AppUpdateState.Error(
+                    "Downloaded update artifact was empty", System.currentTimeMillis()
                 )
-            } else {
-                _updateState.value = AppUpdateState.Error("Downloaded update artifact was empty", System.currentTimeMillis())
+                return
             }
+
+            // Verify before this file is ever offered for execution. A staged
+            // artifact that fails is deleted, not kept around to be retried.
+            val expected = try {
+                val sumsText = URI.create(sumsUrl).toURL().openStream()
+                    .bufferedReader().use { it.readText() }
+                FileChecksum.findInSumsFile(sumsText, assetName)
+            } catch (e: Exception) {
+                null
+            }
+
+            if (expected == null) {
+                stagedFile.delete()
+                _updateState.value = AppUpdateState.Error(
+                    "Could not read the published checksum for $assetName — update not applied.",
+                    System.currentTimeMillis()
+                )
+                return
+            }
+
+            if (!FileChecksum.matches(stagedFile, expected)) {
+                stagedFile.delete()
+                _updateState.value = AppUpdateState.Error(
+                    "Checksum mismatch for $assetName. The download was discarded and no files " +
+                        "were changed.",
+                    System.currentTimeMillis()
+                )
+                return
+            }
+
+            _updateState.value = AppUpdateState.UpdateReady(
+                latestVersion = version,
+                releaseNotes = notes,
+                stagedFilePath = stagedFile.absolutePath
+            )
         } catch (e: Exception) {
             _updateState.value = AppUpdateState.Error("Download interrupted: ${e.message}", System.currentTimeMillis())
         }
@@ -238,14 +377,33 @@ class AppUpdateManager(
         if (!stagedFile.exists()) return
 
         try {
-            val isWindows = System.getProperty("os.name")?.lowercase()?.contains("win") == true
-            val currentPid = ProcessHandle.current().pid()
+            // Re-checked at apply time, not just at check time: the app may have
+            // been running long enough for the earlier answer to be stale, and
+            // this is the step that actually overwrites files.
+            val blocker = inPlaceUpdateBlocker()
+            if (blocker != null) {
+                _updateState.value = AppUpdateState.ManualUpdateRequired(
+                    latestVersion = state.latestVersion,
+                    releaseNotes = state.releaseNotes,
+                    reason = blocker,
+                    releaseUrl = "https://github.com/$GITHUB_REPO/releases/latest"
+                )
+                return
+            }
 
-            val runningJarUri = AppUpdateManager::class.java.protectionDomain?.codeSource?.location?.toURI()
-            val runningJarFile = runningJarUri?.let { File(it) } ?: File("release/Courier-Desktop-latest.jar")
+            val currentPid = ProcessHandle.current().pid()
+            val runningJarFile = runningArtifact() ?: return
             val appDir = runningJarFile.parentFile ?: File(".")
 
-            if (isWindows) {
+            // Relaunch through this JVM's own launcher rather than `start
+            // <file>.jar`, which depends on a .jar file association that is
+            // frequently absent or bound to an archive tool.
+            val javaExe = File(
+                File(System.getProperty("java.home"), "bin"),
+                "javaw.exe"
+            ).let { if (it.isFile) it.absolutePath else "javaw" }
+
+            run {
                 val scriptFile = File(getUpdateStagingDir(), "apply_update.bat")
                 val scriptContent = """
 @echo off
@@ -259,10 +417,15 @@ if not errorlevel 1 (
 )
 
 echo Replacing application files...
+copy /y "${runningJarFile.absolutePath}" "${runningJarFile.absolutePath}.prev" >nul
 copy /y "${stagedFile.absolutePath}" "${runningJarFile.absolutePath}" >nul
+if errorlevel 1 (
+    echo Update failed, restoring previous version...
+    copy /y "${runningJarFile.absolutePath}.prev" "${runningJarFile.absolutePath}" >nul
+)
 
 echo Relaunching Courier...
-start "" "${runningJarFile.absolutePath}"
+start "" "$javaExe" -jar "${runningJarFile.absolutePath}"
 
 del "%~f0"
 exit

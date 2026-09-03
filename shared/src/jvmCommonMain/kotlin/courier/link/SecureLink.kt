@@ -1,6 +1,6 @@
 package courier.link
 
-import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -43,8 +43,22 @@ class SecureLink(
     private var pingJob: Job? = null
     private var isClosed = false
 
+    /**
+     * Completes when this link closes, for whatever reason.
+     *
+     * [incomingPackets] is a SharedFlow, which never completes — so a
+     * `collect` on it cannot be used to learn that the peer went away. Anything
+     * that needs to clean up after a dropped link waits on this instead.
+     */
+    private val closedSignal = CompletableDeferred<Unit>()
+
     val isConnected: Boolean
         get() = !isClosed && socket.isConnected && !socket.isClosed
+
+    /** Suspends until this link is closed. */
+    suspend fun awaitClosed() {
+        closedSignal.await()
+    }
 
     fun start() {
         startReader()
@@ -113,6 +127,7 @@ class SecureLink(
         try {
             socket.close()
         } catch (_: Exception) {}
+        closedSignal.complete(Unit)
     }
 
     companion object {

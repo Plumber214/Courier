@@ -202,9 +202,16 @@ class DownloadManager(
 
             for (id in activeOrQueuedIds) {
                 repository.clearProgress(id)
-                val item = repository.downloads.value.find { it.id == id }
-                if (item != null && !item.isFinished) {
-                    repository.addOrUpdate(item.copy(status = DownloadStatus.CANCELLED, errorMessage = "Cancelled by user"))
+            }
+            // One write for the whole batch. Per-item addOrUpdate rewrote the
+            // entire history file — serialise, fsync, backup copy — once per
+            // cancelled download.
+            val cancelling = activeOrQueuedIds.toSet()
+            repository.updateAll { item ->
+                if (item.id in cancelling && !item.isFinished) {
+                    item.copy(status = DownloadStatus.CANCELLED, errorMessage = "Cancelled by user")
+                } else {
+                    item
                 }
             }
         }

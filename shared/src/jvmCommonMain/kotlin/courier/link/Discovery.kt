@@ -41,6 +41,16 @@ class Discovery(
     private var broadcastJob: Job? = null
     private var jmdns: JmDNS? = null
 
+    // Held for the announcing window rather than opened and closed per
+    // broadcast. Announcing runs at ~1.5 s while the Devices tab is open, so
+    // the old approach churned a socket about forty times a minute.
+    private var broadcastSocket: DatagramSocket? = null
+
+    // Enumerating every interface is a syscall-heavy operation and the answer
+    // rarely changes; a network change closes the announcing window anyway.
+    private var cachedBroadcastTargets: List<InetAddress> = emptyList()
+    private var broadcastTargetsRefreshedAtMs = 0L
+
     // Rate limiting map: Remote IP -> Last received epoch ms
     private val udpRateLimits = ConcurrentHashMap<String, Long>()
 
@@ -117,6 +127,12 @@ class Discovery(
         startUdpListener() // Ensure listener is running to catch responses
         _isScanning.value = true
 
+        broadcastSocket = try {
+            DatagramSocket().apply { broadcast = true }
+        } catch (_: Exception) {
+            null
+        }
+
         broadcastJob?.cancel()
         broadcastJob = scope.launch {
             var pruneTick = 0
@@ -135,6 +151,10 @@ class Discovery(
     fun stopActiveAnnouncing() {
         broadcastJob?.cancel()
         broadcastJob = null
+        try {
+            broadcastSocket?.close()
+        } catch (_: Exception) {}
+        broadcastSocket = null
         _isScanning.value = false
         stopMdns()
     }
@@ -160,11 +180,51 @@ class Discovery(
 
     fun broadcastNow() {
         scope.launch {
-            sendUdpBroadcast()
+            // A manual kick usually follows a network change, so this is the one
+            // call that should not trust the cached interface list.
+            sendUdpBroadcast(forceRefreshTargets = true)
         }
     }
 
-    private fun sendUdpBroadcast() {
+    /**
+     * Every address worth broadcasting to: the global address plus each live
+     * interface's own subnet broadcast.
+     *
+     * Recomputed at most once a minute. `broadcastNow` forces a refresh,
+     * because the one time the answer really has changed is a network switch,
+     * which is exactly what triggers a manual kick.
+     */
+    private fun broadcastTargets(forceRefresh: Boolean): List<InetAddress> {
+        val now = System.currentTimeMillis()
+        if (!forceRefresh &&
+            cachedBroadcastTargets.isNotEmpty() &&
+            now - broadcastTargetsRefreshedAtMs < 60_000L
+        ) {
+            return cachedBroadcastTargets
+        }
+
+        val targets = mutableListOf<InetAddress>()
+        try {
+            targets.add(InetAddress.getByName("255.255.255.255"))
+        } catch (_: Exception) {}
+
+        try {
+            val interfaces = NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val iface = interfaces.nextElement()
+                if (iface.isLoopback || !iface.isUp) continue
+                for (addr in iface.interfaceAddresses) {
+                    addr.broadcast?.let { targets.add(it) }
+                }
+            }
+        } catch (_: Exception) {}
+
+        cachedBroadcastTargets = targets
+        broadcastTargetsRefreshedAtMs = now
+        return targets
+    }
+
+    private fun sendUdpBroadcast(forceRefreshTargets: Boolean = false) {
         try {
             val publicIdentity = getPublicIdentity()
             val bodyJson = json.encodeToJsonElement(publicIdentity).jsonObject
@@ -174,29 +234,21 @@ class Discovery(
             )
             val jsonBytes = (json.encodeToString(packet) + "\n").toByteArray(Charsets.UTF_8)
 
-            val socket = DatagramSocket()
-            socket.broadcast = true
-
-            // Send to 255.255.255.255
-            val globalBroadcast = InetAddress.getByName("255.255.255.255")
-            socket.send(DatagramPacket(jsonBytes, jsonBytes.size, globalBroadcast, LinkConstants.DEFAULT_PORT))
-
-            // Also broadcast to specific subnet interfaces
-            val interfaces = NetworkInterface.getNetworkInterfaces()
-            while (interfaces.hasMoreElements()) {
-                val iface = interfaces.nextElement()
-                if (iface.isLoopback || !iface.isUp) continue
-
-                for (addr in iface.interfaceAddresses) {
-                    val bcast = addr.broadcast
-                    if (bcast != null) {
-                        try {
-                            socket.send(DatagramPacket(jsonBytes, jsonBytes.size, bcast, LinkConstants.DEFAULT_PORT))
-                        } catch (_: Exception) {}
-                    }
+            // Use the socket held for the announcing window when there is one.
+            // A one-off kick outside that window opens and closes its own.
+            val held = broadcastSocket
+            val socket = held ?: DatagramSocket().apply { broadcast = true }
+            try {
+                for (target in broadcastTargets(forceRefreshTargets)) {
+                    try {
+                        socket.send(
+                            DatagramPacket(jsonBytes, jsonBytes.size, target, LinkConstants.DEFAULT_PORT)
+                        )
+                    } catch (_: Exception) {}
                 }
+            } finally {
+                if (held == null) socket.close()
             }
-            socket.close()
         } catch (_: Exception) {}
     }
 

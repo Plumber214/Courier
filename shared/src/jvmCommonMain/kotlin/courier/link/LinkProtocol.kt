@@ -27,6 +27,16 @@ object LinkConstants {
     const val RECONNECT_BACKOFF_MAX_MS = 30_000L
     const val ASLEEP_THRESHOLD_MS = 15 * 60 * 1000L // 15 minutes (§0.7)
 
+    /**
+     * How often a live last-seen timestamp is written through to disk.
+     *
+     * Last-seen only appears in the UI while a device is *not* connected, so it
+     * only has to be accurate at the moment the link drops — which is flushed
+     * explicitly. This interval exists solely so a force-stop or crash loses at
+     * most a minute of it. See PLAN-007 G6.
+     */
+    const val LAST_SEEN_PERSIST_INTERVAL_MS = 60_000L
+
     // Packet Types
     const val TYPE_IDENTITY = "courier.identity"
     const val TYPE_IDENTITY_UPDATE = "courier.identity.update"

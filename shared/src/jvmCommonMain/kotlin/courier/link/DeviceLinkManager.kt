@@ -92,6 +92,17 @@ class DeviceLinkManager(
     private val reconnectBackoffMs = ConcurrentHashMap<String, Long>()
     private val nextAttemptAtMs = ConcurrentHashMap<String, Long>()
 
+    // Last-seen, held in memory and written through rarely.
+    //
+    // It used to be persisted on every received packet, and TrustStore.save is
+    // a durable three-file operation: serialise the whole paired list, write a
+    // temp file, fd.sync(), copy the previous file to .bak, atomically move.
+    // With status packets streaming during a remote download that was several
+    // fsync'd writes per second, for a timestamp that is only ever displayed
+    // while a device is offline.
+    private val lastSeenMs = ConcurrentHashMap<String, Long>()
+    private val lastPersistedSeenMs = ConcurrentHashMap<String, Long>()
+
     private val networkMonitor = createNetworkChangeMonitor()
 
     private val _connectionStates = MutableStateFlow<Map<String, ConnectionStatus>>(emptyMap())
@@ -188,6 +199,10 @@ class DeviceLinkManager(
         reconnectJob = null
         linkServer.stop()
         discovery.stop()
+        // Write through before tearing the links down, or the in-memory
+        // last-seen for a device that was connected right up to this point is
+        // lost and the card falls back to a stale timestamp.
+        activeLinks.keys.forEach { flushLastSeen(it) }
         activeLinks.values.forEach { it.close() }
         activeLinks.clear()
         reconnectBackoffMs.clear()
@@ -208,30 +223,68 @@ class DeviceLinkManager(
         reconnectSignal.trySend(Unit)
     }
 
+    /**
+     * Records that [deviceId] was heard from, writing through to disk at most
+     * once per [LinkConstants.LAST_SEEN_PERSIST_INTERVAL_MS].
+     */
+    private fun touchLastSeen(deviceId: String) {
+        val now = System.currentTimeMillis()
+        lastSeenMs[deviceId] = now
+        val lastPersisted = lastPersistedSeenMs[deviceId] ?: 0L
+        if (now - lastPersisted >= LinkConstants.LAST_SEEN_PERSIST_INTERVAL_MS) {
+            lastPersistedSeenMs[deviceId] = now
+            trustStore.updateLastSeen(deviceId, now)
+        }
+    }
+
+    /**
+     * Writes the in-memory last-seen for [deviceId] through to disk.
+     *
+     * Called when a link drops and when the subsystem stops — the moments the
+     * value actually becomes visible, since the UI only shows it while a device
+     * is not connected.
+     */
+    private fun flushLastSeen(deviceId: String) {
+        val seen = lastSeenMs[deviceId] ?: return
+        if (lastPersistedSeenMs[deviceId] == seen) return
+        lastPersistedSeenMs[deviceId] = seen
+        trustStore.updateLastSeen(deviceId, seen)
+    }
+
     private fun onLinkConnected(link: SecureLink) {
         val peerId = link.peerDeviceId
         val existing = activeLinks[peerId]
         existing?.close()
         activeLinks[peerId] = link
 
-        trustStore.updateLastSeen(peerId)
+        touchLastSeen(peerId)
         updateConnectionState(peerId, ConnectionStatus.CONNECTED)
 
-        // Listen for incoming packets
+        // Listen for incoming packets.
+        val packetJob = scope.launch {
+            link.incomingPackets.collect { packet ->
+                touchLastSeen(peerId)
+                handleIncomingPacket(link, packet)
+            }
+        }
+
+        // Clean up when the link drops.
+        //
+        // This used to be a `finally` on the collect above — which never ran.
+        // incomingPackets is a SharedFlow, and collecting one never completes,
+        // so a closed socket left the collector suspended forever: the dead
+        // link stayed in activeLinks, the ASLEEP transition never fired from
+        // here, and one coroutine leaked per connection. awaitClosed is the
+        // signal that actually arrives.
         scope.launch {
-            try {
-                link.incomingPackets.collect { packet ->
-                    trustStore.updateLastSeen(peerId)
-                    handleIncomingPacket(link, packet)
-                }
-            } finally {
-                if (activeLinks[peerId] == link) {
-                    activeLinks.remove(peerId)
-                    val now = System.currentTimeMillis()
-                    trustStore.updateLastSeen(peerId, now)
-                    updateConnectionState(peerId, ConnectionStatus.ASLEEP)
-                    reconnectSignal.trySend(Unit)
-                }
+            link.awaitClosed()
+            packetJob.cancel()
+            if (activeLinks[peerId] == link) {
+                activeLinks.remove(peerId)
+                lastSeenMs[peerId] = System.currentTimeMillis()
+                flushLastSeen(peerId)
+                updateConnectionState(peerId, ConnectionStatus.ASLEEP)
+                reconnectSignal.trySend(Unit)
             }
         }
 
@@ -480,6 +533,8 @@ class DeviceLinkManager(
         }
         reconnectBackoffMs.remove(deviceId)
         nextAttemptAtMs.remove(deviceId)
+        lastSeenMs.remove(deviceId)
+        lastPersistedSeenMs.remove(deviceId)
         replayGuard.forget(deviceId)
         scope.launch { outbox.forgetDevice(deviceId) }
         updateConnectionState(deviceId, ConnectionStatus.DISCONNECTED)

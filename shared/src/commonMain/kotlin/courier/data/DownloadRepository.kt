@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 
@@ -55,15 +56,22 @@ class DownloadRepository {
         }
     }
 
+    // ---------------------------------------------------------------------
+    // Writes happen after the state settles, never inside the update lambda.
+    //
+    // MutableStateFlow.update re-invokes its lambda on CAS contention, so a
+    // persist call inside it could run the whole serialise + fd.sync() + backup
+    // sequence more than once for a single logical change. updateAndGet returns
+    // the committed list, which is then written exactly once.
+    // ---------------------------------------------------------------------
+
     fun saveDownloads(items: List<DownloadItem>) {
-        _downloads.update {
-            persistDownloads(items)
-            items
-        }
+        _downloads.value = items
+        persistDownloads(items)
     }
 
     fun addOrUpdate(item: DownloadItem, persist: Boolean = true) {
-        _downloads.update { current ->
+        val updated = _downloads.updateAndGet { current ->
             val mutable = current.toMutableList()
             val index = mutable.indexOfFirst { it.id == item.id }
             if (index >= 0) {
@@ -71,11 +79,23 @@ class DownloadRepository {
             } else {
                 mutable.add(0, item)
             }
-            if (persist) {
-                persistDownloads(mutable)
-            }
             mutable
         }
+        if (persist) {
+            persistDownloads(updated)
+        }
+    }
+
+    /**
+     * Applies [transform] to every item and persists once.
+     *
+     * For bulk transitions such as Cancel All, which previously called
+     * [addOrUpdate] per item and so rewrote the entire history file — with an
+     * fsync and a backup copy each time — once per affected download.
+     */
+    fun updateAll(transform: (DownloadItem) -> DownloadItem) {
+        val updated = _downloads.updateAndGet { current -> current.map(transform) }
+        persistDownloads(updated)
     }
 
     fun updateProgress(
@@ -106,18 +126,12 @@ class DownloadRepository {
 
     fun remove(id: String) {
         clearProgress(id)
-        _downloads.update { current ->
-            val filtered = current.filter { it.id != id }
-            persistDownloads(filtered)
-            filtered
-        }
+        val updated = _downloads.updateAndGet { current -> current.filter { it.id != id } }
+        persistDownloads(updated)
     }
 
     fun clearCompleted() {
-        _downloads.update { current ->
-            val filtered = current.filter { !it.isFinished }
-            persistDownloads(filtered)
-            filtered
-        }
+        val updated = _downloads.updateAndGet { current -> current.filter { !it.isFinished } }
+        persistDownloads(updated)
     }
 }

@@ -24,8 +24,25 @@ data class HomeUiState(
     val showQualityPicker: Boolean = false,
     val detectedClipboardUrl: String? = null,
     val showClipboardBanner: Boolean = false,
-    val activePreviewItem: DownloadItem? = null
+    val activePreviewItem: DownloadItem? = null,
+    val remoteSendMessage: String? = null
 )
+
+/**
+ * What to tell the user after handing a download to a paired device.
+ *
+ * Queued is deliberately not phrased as a failure: the outbox is durable and
+ * the request survives a restart on both ends. What it must not do is read like
+ * the download has started somewhere.
+ */
+internal fun describeRemoteSend(result: courier.link.SendDownloadResult): String = when (result) {
+    is courier.link.SendDownloadResult.Sent ->
+        "Sent to ${result.deviceName}"
+    is courier.link.SendDownloadResult.Queued ->
+        "${result.deviceName} is offline — queued, and will be sent when it reconnects"
+    is courier.link.SendDownloadResult.UnknownDevice ->
+        "That device is no longer paired, so nothing was sent"
+}
 
 class HomeViewModel(
     private val downloadManager: DownloadManager,
@@ -195,7 +212,7 @@ class HomeViewModel(
         if (url.isBlank()) return
 
         scope.launch {
-            courier.di.AppModule.deviceLinkManager.sendDownloadRequest(
+            val result = courier.di.AppModule.deviceLinkManager.sendDownloadRequest(
                 targetDeviceId = targetDeviceId,
                 url = url,
                 // Resolution first, format id only as a fallback. The id came
@@ -203,6 +220,10 @@ class HomeViewModel(
                 // other device; the resolution is the part that travels.
                 formatHint = format?.resolution ?: format?.formatId,
                 audioOnly = isAudioOnly
+            )
+
+            _uiState.value = _uiState.value.copy(
+                remoteSendMessage = describeRemoteSend(result)
             )
         }
 
@@ -212,6 +233,10 @@ class HomeViewModel(
             showQualityPicker = false,
             analysisError = null
         )
+    }
+
+    fun clearRemoteSendMessage() {
+        _uiState.value = _uiState.value.copy(remoteSendMessage = null)
     }
 
     fun dismissQualityPicker() {

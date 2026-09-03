@@ -39,7 +39,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import courier.di.AppModule
-import courier.platform.getPlatformActions
+import courier.ui.layout.LocalWidthClass
+import courier.ui.layout.ProvideWidthClass
+import courier.ui.layout.WidthClass
 import courier.ui.screens.DevicesScreen
 import courier.ui.screens.HomeScreen
 import courier.ui.screens.SettingsScreen
@@ -63,7 +65,6 @@ fun App(initialTab: AppTab = AppTab.DOWNLOADS) {
     val devicesViewModel = remember { AppModule.provideDevicesViewModel() }
 
     var selectedTab by rememberSaveable { mutableStateOf(initialTab) }
-    val isAndroid = remember { getPlatformActions().isAndroid() }
 
     // A shared link has to reach the Downloads tab to be acted on, and the user
     // may well have been on Settings or Devices when they shared. Observed here
@@ -76,12 +77,17 @@ fun App(initialTab: AppTab = AppTab.DOWNLOADS) {
     }
 
     CourierTheme {
+        // The one place available width is measured. Everything below reads
+        // LocalWidthClass rather than asking which operating system it is on.
+        ProvideWidthClass(modifier = Modifier.fillMaxSize()) {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = Color.Transparent
         ) {
-            if (isAndroid) {
-                // Mobile layout: Bottom NavigationBar
+            // A narrow window gets the bottom bar whether or not it is a phone,
+            // and a tablet in landscape gets the rail.
+            if (LocalWidthClass.current == WidthClass.COMPACT) {
+                // Narrow layout: Bottom NavigationBar
                 Scaffold(
                     containerColor = Color.Transparent,
                     bottomBar = {
@@ -137,7 +143,7 @@ fun App(initialTab: AppTab = AppTab.DOWNLOADS) {
                     }
                 }
             } else {
-                // Desktop layout: Left NavigationRail
+                // Wider layout: Left NavigationRail
                 Row(modifier = Modifier.fillMaxSize()) {
                     NavigationRail(
                         containerColor = GlassBackground,
@@ -186,6 +192,7 @@ fun App(initialTab: AppTab = AppTab.DOWNLOADS) {
                     }
                 }
             }
+        }
         }
     }
 }

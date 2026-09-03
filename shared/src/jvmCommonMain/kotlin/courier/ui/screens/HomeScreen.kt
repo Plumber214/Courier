@@ -29,11 +29,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PlayCircleOutline
 import androidx.compose.material.icons.filled.Settings
@@ -69,7 +74,11 @@ import courier.ui.components.MediaPlayerModal
 import courier.ui.components.PhotoPickerDialog
 import courier.ui.components.QualityPickerDialog
 import courier.ui.components.SetupWizardDialog
+import courier.ui.components.StatusBanner
 import courier.ui.components.UrlInputBar
+import courier.ui.layout.CONTENT_MAX_WIDTH_DP
+import courier.ui.layout.LocalWidthClass
+import courier.ui.layout.WidthClass
 import courier.ui.theme.AccentCyan
 import courier.ui.theme.AccentPink
 import courier.ui.theme.CardBorderDark
@@ -122,6 +131,10 @@ fun HomeScreen(
         }
     }
 
+    val widthClass = LocalWidthClass.current
+    val isCompact = widthClass == WidthClass.COMPACT
+    val gutter = if (isCompact) 16.dp else 22.dp
+
     val activeCount = downloads.count { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.MERGING }
     val queuedCount = downloads.count { it.status == DownloadStatus.QUEUED }
     val completedCount = downloads.count { it.status == DownloadStatus.COMPLETED }
@@ -133,10 +146,18 @@ fun HomeScreen(
             .navigationBarsPadding(),
         color = Color.Transparent
     ) {
+        // Centred and capped rather than stretched: a full-width line of body
+        // text on a 2560 dp monitor is unreadable, and the download rows would
+        // be mostly empty space between a thumbnail and three buttons.
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.TopCenter
+        ) {
         Column(
             modifier = Modifier
+                .widthIn(max = CONTENT_MAX_WIDTH_DP.dp)
                 .fillMaxSize()
-                .padding(horizontal = 22.dp)
+                .padding(horizontal = gutter)
                 .padding(top = 18.dp, bottom = 14.dp)
         ) {
             // App Bar
@@ -223,6 +244,18 @@ fun HomeScreen(
                         )
                     }
                 }
+            }
+
+            // Handing a download to a paired device used to close the picker and
+            // say nothing — whether it went out, or was queued because the other
+            // device is asleep, or never had a link at all.
+            if (uiState.remoteSendMessage != null) {
+                Spacer(modifier = Modifier.height(14.dp))
+                StatusBanner(
+                    message = uiState.remoteSendMessage,
+                    icon = Icons.Default.Devices,
+                    onDismiss = homeViewModel::clearRemoteSendMessage
+                )
             }
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -542,14 +575,7 @@ fun HomeScreen(
                     }
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(bottom = 16.dp)
-                ) {
-                    items(downloads, key = { it.id }) { item ->
+                val renderDownload: @Composable (courier.model.DownloadItem) -> Unit = { item ->
                         val isDismissing = dismissingItemIds.contains(item.id)
 
                         AnimatedVisibility(
@@ -599,9 +625,39 @@ fun HomeScreen(
                                 onOpenFolder = { downloadManager.openDownloadFolder(item) }
                             )
                         }
+                }
+
+                if (widthClass == WidthClass.EXPANDED) {
+                    // A single column on a 1400 dp window is a stripe of cards
+                    // down the middle of an empty screen.
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(bottom = 16.dp)
+                    ) {
+                        gridItems(downloads, key = { it.id }) { item ->
+                            renderDownload(item)
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(bottom = 16.dp)
+                    ) {
+                        items(downloads, key = { it.id }) { item ->
+                            renderDownload(item)
+                        }
                     }
                 }
             }
+        }
         }
 
         // In-App Media Player Preview Modal

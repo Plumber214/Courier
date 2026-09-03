@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -64,6 +65,10 @@ import courier.link.DiscoveredDevice
 import courier.link.PairedDevice
 import courier.link.PairingSessionState
 import courier.platform.getPlatformActions
+import courier.ui.components.StatusBanner
+import courier.ui.layout.CONTENT_MAX_WIDTH_DP
+import courier.ui.layout.LocalWidthClass
+import courier.ui.layout.WidthClass
 import courier.ui.theme.AccentCyan
 import courier.ui.theme.AccentPink
 import courier.ui.theme.CardBorderDark
@@ -79,6 +84,20 @@ import courier.ui.theme.TextPrimary
 import courier.ui.theme.TextSecondary
 import courier.ui.theme.WarningOrange
 import courier.viewmodel.DevicesViewModel
+
+/**
+ * A human label for the peer's self-reported device type.
+ *
+ * Deliberately not an operating system: `deviceType` is set to "phone" or
+ * "desktop" by the peer itself and is not evidence of anything more specific.
+ */
+internal fun deviceTypeLabel(deviceType: String): String = when (deviceType.lowercase()) {
+    "phone" -> "Phone"
+    "tablet" -> "Tablet"
+    "laptop" -> "Laptop"
+    "desktop" -> "Desktop"
+    else -> "Device"
+}
 
 @Composable
 fun DevicesScreen(
@@ -113,60 +132,28 @@ fun DevicesScreen(
         }
     }
 
-    Column(
+    val gutter = if (LocalWidthClass.current == WidthClass.COMPACT) 16.dp else 24.dp
+
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(horizontal = 24.dp, vertical = 20.dp)
+            .verticalScroll(scrollState),
+        contentAlignment = Alignment.TopCenter
     ) {
-        // Clipboard Status Banner (Stage 4)
-        androidx.compose.animation.AnimatedVisibility(
-            visible = clipboardStatusMessage != null,
-            enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandVertically(),
-            exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.shrinkVertically()
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 14.dp)
-                    .background(PrimaryContainer.copy(alpha = 0.9f), RoundedCornerShape(10.dp))
-                    .border(1.dp, PrimaryIndigo, RoundedCornerShape(10.dp))
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.ContentPaste,
-                            contentDescription = null,
-                            tint = AccentCyan,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = clipboardStatusMessage ?: "",
-                            color = TextPrimary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                    IconButton(
-                        onClick = { viewModel.clearClipboardStatusMessage() },
-                        modifier = Modifier.size(24.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Dismiss",
-                            tint = TextMuted,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
-        }
+    Column(
+        modifier = Modifier
+            .widthIn(max = CONTENT_MAX_WIDTH_DP.dp)
+            .fillMaxWidth()
+            .padding(horizontal = gutter, vertical = 20.dp)
+    ) {
+        // Clipboard Status Banner (Stage 4), now the shared component that the
+        // Downloads tab uses to confirm a send to a paired device.
+        StatusBanner(
+            message = clipboardStatusMessage,
+            icon = Icons.Default.ContentPaste,
+            onDismiss = { viewModel.clearClipboardStatusMessage() },
+            modifier = Modifier.padding(bottom = 14.dp)
+        )
 
         // Header
         Row(
@@ -437,6 +424,7 @@ fun DevicesScreen(
             )
         }
     }
+    }
 
     // Pairing Verification Code Dialog
     when (val state = pairingState) {
@@ -612,7 +600,10 @@ fun PairedDeviceCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Box(
                         modifier = Modifier
                             .size(36.dp)
@@ -629,13 +620,25 @@ fun PairedDeviceCard(
 
                     Spacer(modifier = Modifier.width(12.dp))
 
-                    Column {
-                        Text(
-                            text = device.deviceName,
-                            color = TextPrimary,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = device.deviceName,
+                                color = TextPrimary,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = deviceTypeLabel(device.deviceType),
+                                color = TextMuted,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                         Spacer(modifier = Modifier.height(2.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
@@ -733,7 +736,10 @@ fun DiscoveredDeviceCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
                 Box(
                     modifier = Modifier
                         .size(36.dp)
@@ -750,21 +756,35 @@ fun DiscoveredDeviceCard(
 
                 Spacer(modifier = Modifier.width(12.dp))
 
-                Column {
+                // Name and kind lead; the address is a detail you need only when
+                // two devices share a name, or when a pairing will not start.
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = device.identity.deviceName,
                         color = TextPrimary,
                         fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
+                        text = deviceTypeLabel(device.identity.deviceType),
+                        color = TextSecondary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
                         text = "${device.hostAddress}:${device.tcpPort}",
                         color = TextMuted,
-                        fontSize = 12.sp
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 }
             }
+
+            Spacer(modifier = Modifier.width(10.dp))
 
             Button(
                 onClick = onPairClick,

@@ -28,6 +28,25 @@ import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import java.util.concurrent.ConcurrentHashMap
 
+/**
+ * What actually happened to a download handed to a paired device.
+ *
+ * The request is written to the outbox either way, so "queued" is a real
+ * outcome and not a failure — but it is a different one from "sent", and the
+ * caller previously received only a sequence number and could not tell them
+ * apart.
+ */
+sealed class SendDownloadResult {
+    /** Written to the outbox and pushed over a live link. */
+    data class Sent(val seq: Long, val deviceName: String) : SendDownloadResult()
+
+    /** Written to the outbox; the device is not connected right now. */
+    data class Queued(val seq: Long, val deviceName: String) : SendDownloadResult()
+
+    /** No such pairing — the device was unpaired between opening the picker and sending. */
+    data class UnknownDevice(val deviceId: String) : SendDownloadResult()
+}
+
 @kotlinx.serialization.Serializable
 data class RemoteDownloadRequest(
     val url: String,
@@ -433,7 +452,10 @@ class DeviceLinkManager(
         formatHint: String? = null,
         audioOnly: Boolean = false,
         destinationHint: String? = null
-    ): Long {
+    ): SendDownloadResult {
+        val paired = trustStore.pairedDevices.value.firstOrNull { it.deviceId == targetDeviceId }
+            ?: return SendDownloadResult.UnknownDevice(targetDeviceId)
+
         val packet = LinkPacket(
             type = LinkConstants.TYPE_DOWNLOAD_REQUEST,
             body = buildJsonObject {
@@ -460,9 +482,11 @@ class DeviceLinkManager(
             )
             link.sendPacket(packetWithSeq)
             outbox.markAttempt(seq)
+            return SendDownloadResult.Sent(seq, paired.deviceName)
         }
 
-        return seq
+        // Still enqueued — the outbox delivers it on reconnect.
+        return SendDownloadResult.Queued(seq, paired.deviceName)
     }
 
     fun sendDownloadAccepted(targetDeviceId: String, seq: Long, localItemId: String) {

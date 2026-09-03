@@ -5,9 +5,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -184,9 +186,17 @@ fun QualityPickerDialog(
     }
 
     Dialog(onDismissRequest = onDismiss) {
+        // The dialog used to scroll only its 160 dp format list, so on a short
+        // screen — a phone in landscape, a small laptop — the Download button
+        // sat below the bottom edge with no way to reach it. The middle scrolls
+        // now; the header and the action row are pinned.
+        BoxWithConstraints {
+        val maxDialogHeight = maxHeight * 0.92f
+
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
+                .heightIn(max = maxDialogHeight)
                 .padding(4.dp),
             shape = RoundedCornerShape(26.dp),
             color = SurfaceDark,
@@ -228,6 +238,15 @@ fun QualityPickerDialog(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        // fill = false so a short dialog still wraps its content
+                        // rather than stretching to the whole screen.
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState())
+                ) {
+
                 // Video Preview Card
                 Row(
                     modifier = Modifier
@@ -237,6 +256,9 @@ fun QualityPickerDialog(
                         .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // The real thumbnail, not a generic icon. VideoInfo has
+                    // carried thumbnailUrl all along; this is the one screen
+                    // where seeing the video confirms you fetched the right one.
                     Box(
                         modifier = Modifier
                             .size(72.dp, 52.dp)
@@ -245,12 +267,18 @@ fun QualityPickerDialog(
                             .border(1.dp, CardBorderDark, RoundedCornerShape(10.dp)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.VideoLibrary,
-                            contentDescription = null,
-                            tint = platformColor,
-                            modifier = Modifier.size(26.dp)
-                        )
+                        NetworkImage(
+                            url = videoInfo.thumbnailUrl,
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.VideoLibrary,
+                                contentDescription = null,
+                                tint = platformColor,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.width(12.dp))
@@ -383,11 +411,10 @@ fun QualityPickerDialog(
 
                 val displayFormats = if (isAudioOnly) audioFormats else videoFormats
 
+                // No inner scroll any more — the dialog body scrolls as one, so
+                // a long format list no longer traps the wheel in a 160 dp box.
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 160.dp)
-                        .verticalScroll(rememberScrollState()),
+                    modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     for (fmt in displayFormats) {
@@ -409,7 +436,10 @@ fun QualityPickerDialog(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f, fill = false)
+                            ) {
                                 RadioButton(
                                     selected = isSelected,
                                     onClick = { selectedFormat = fmt },
@@ -422,12 +452,28 @@ fun QualityPickerDialog(
 
                                 Spacer(modifier = Modifier.width(8.dp))
 
-                                Text(
-                                    text = fmt.displayLabel,
-                                    color = if (isSelected) TextPrimary else TextSecondary,
-                                    fontSize = 13.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                                )
+                                Column {
+                                    Text(
+                                        text = fmt.displayLabel,
+                                        color = if (isSelected) TextPrimary else TextSecondary,
+                                        fontSize = 13.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+
+                                    // Parsed out of the format list since v1.0
+                                    // and never shown: choosing a resolution
+                                    // meant guessing what it would cost.
+                                    val size = fmt.formattedFileSize
+                                    if (size != null) {
+                                        Text(
+                                            text = size,
+                                            color = TextMuted,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
                             }
 
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -640,6 +686,8 @@ fun QualityPickerDialog(
                     }
                 }
 
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Actions
@@ -692,6 +740,7 @@ fun QualityPickerDialog(
                     }
                 }
             }
+        }
         }
     }
 }

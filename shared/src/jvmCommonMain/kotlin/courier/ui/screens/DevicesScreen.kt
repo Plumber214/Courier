@@ -451,12 +451,15 @@ fun DevicesScreen(
             )
         }
         is PairingSessionState.OutgoingRequest -> {
+            // No Confirm here. The device that receives the request is the one
+            // that approves it — if either side could complete the pairing, the
+            // code on the second screen would never actually be compared.
             PairingVerificationDialog(
                 title = "Pairing with Device",
                 deviceName = state.device.identity.deviceName,
                 verificationCode = state.verificationCode,
                 isIncoming = false,
-                onConfirm = { viewModel.acceptPairing() },
+                onConfirm = null,
                 onDismiss = { viewModel.cancelPairing() }
             )
         }
@@ -789,7 +792,7 @@ fun PairingVerificationDialog(
     deviceName: String,
     verificationCode: String,
     isIncoming: Boolean,
-    onConfirm: () -> Unit,
+    onConfirm: (() -> Unit)?,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -801,7 +804,7 @@ fun PairingVerificationDialog(
                     text = if (isIncoming) {
                         "$deviceName wants to pair with this device. Verify that both screens show the same 8-character code:"
                     } else {
-                        "Pairing with $deviceName. Verify that both screens show the same 8-character code:"
+                        "Pairing with $deviceName. Check that it shows the same 8-character code:"
                     },
                     color = TextSecondary,
                     fontSize = 13.sp
@@ -829,21 +832,39 @@ fun PairingVerificationDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                Text(
-                    text = "If the codes match, tap Confirm on both devices.",
-                    color = TextMuted,
-                    fontSize = 12.sp
-                )
+                if (isIncoming) {
+                    Text(
+                        text = "If the codes match, tap Confirm to pair.",
+                        color = TextMuted,
+                        fontSize = 12.sp
+                    )
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp),
+                            color = AccentCyan,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Waiting for $deviceName to confirm...",
+                            color = TextMuted,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
             }
         },
         confirmButton = {
-            Button(
-                onClick = onConfirm,
-                colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen)
-            ) {
-                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Confirm", color = Color.White, fontWeight = FontWeight.Bold)
+            if (onConfirm != null) {
+                Button(
+                    onClick = onConfirm,
+                    colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen)
+                ) {
+                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Confirm", color = Color.White, fontWeight = FontWeight.Bold)
+                }
             }
         },
         dismissButton = {

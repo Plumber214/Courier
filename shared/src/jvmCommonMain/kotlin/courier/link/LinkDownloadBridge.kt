@@ -36,11 +36,15 @@ class LinkDownloadBridge(
         val senderDevice = linkManager.trustStore.getPairedDevice(senderDeviceId)
         val senderName = senderDevice?.deviceName ?: "Paired Device"
 
-        // Enqueue on this receiver device (Decision E2)
+        // Enqueue on this receiver device (Decision E2).
+        //
+        // req.destinationHint is deliberately ignored (PLAN-007 G2). Pairing is
+        // consent to accept download requests, not write access to arbitrary
+        // paths — the receiving device decides where its own files land. The
+        // field stays on the wire format so a v1.6.0 peer still parses.
         val itemId = downloadManager.enqueueDownload(
             url = req.url,
-            isAudioOnly = req.audioOnly,
-            destinationDir = req.destinationHint
+            isAudioOnly = req.audioOnly
         )
 
         // Notify user of incoming download from paired device

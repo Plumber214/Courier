@@ -481,6 +481,7 @@ class DeviceLinkManager(
         reconnectBackoffMs.remove(deviceId)
         nextAttemptAtMs.remove(deviceId)
         replayGuard.forget(deviceId)
+        scope.launch { outbox.forgetDevice(deviceId) }
         updateConnectionState(deviceId, ConnectionStatus.DISCONNECTED)
         reconnectSignal.trySend(Unit)
     }

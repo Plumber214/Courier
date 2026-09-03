@@ -56,6 +56,25 @@ class PairingManager(
 
         if (isPair) {
             if (isAccepted) {
+                // An acceptance is only meaningful as the answer to a request
+                // WE sent, on the link we sent it over.
+                //
+                // Without both checks this branch trusts a boolean the peer
+                // controls. TYPE_PAIR is deliberately accepted from unpaired
+                // peers (DeviceLinkManager.handleIncomingPacket) because pairing
+                // could not otherwise start — so any device that completed the
+                // TLS handshake could send {"pair":true,"accepted":true} and
+                // write itself into the trust store with its certificate
+                // pinned, with no dialog shown on this device at all.
+                if (link !== activePairingLink ||
+                    _pairingState.value !is PairingSessionState.OutgoingRequest
+                ) {
+                    println(
+                        "[SECURITY] Ignoring unsolicited pair acceptance from ${link.peerDeviceId}"
+                    )
+                    return
+                }
+
                 // Outgoing request accepted by peer
                 val peerCert = link.peerCertificate
                 val peerCertSha256 = CertificateStore.computeSha256(peerCert.encoded)
@@ -74,7 +93,19 @@ class PairingManager(
                 trustStore.addOrUpdatePairedDevice(pairedDevice)
                 cancelPairing()
             } else {
-                // Incoming pair request from peer
+                // Incoming pair request from peer.
+                //
+                // Only entertained while idle. Otherwise a third device could
+                // take over activePairingLink mid-ceremony, and the acceptance
+                // we are actually waiting for would then be dropped by the
+                // check above.
+                if (_pairingState.value !is PairingSessionState.Idle) {
+                    println(
+                        "[SECURITY] Refusing pair request from ${link.peerDeviceId}: another pairing is in progress"
+                    )
+                    return
+                }
+
                 val peerCertSha256 = CertificateStore.computeSha256(link.peerCertificate.encoded)
                 val code = certStore.computeVerificationCode(peerCertSha256)
                 activePairingLink = link
@@ -93,11 +124,17 @@ class PairingManager(
                 startPairingTimeout()
             }
         } else {
-            // Peer rejected or unpaired
+            // Peer rejected, or a paired peer is telling us it has unpaired.
+            //
+            // A rejection only ends the session it belongs to: an unpaired
+            // stranger sending pair:false must not be able to cancel a pairing
+            // ceremony we are running with someone else.
             if (trustStore.isPaired(link.peerDeviceId)) {
                 trustStore.removePairedDevice(link.peerDeviceId)
             }
-            cancelPairing()
+            if (link === activePairingLink) {
+                cancelPairing()
+            }
         }
     }
 

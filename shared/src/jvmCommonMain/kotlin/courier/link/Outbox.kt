@@ -87,6 +87,20 @@ class Outbox(private val fileNameOverride: String? = null) {
         items.toList()
     }
 
+    /**
+     * Drops every queued packet for a device that has been unpaired.
+     *
+     * Queued work outlives the pairing otherwise: the items persist across
+     * restarts and would be flushed at a device re-paired under the same id,
+     * delivering requests the user made before revoking trust.
+     */
+    suspend fun forgetDevice(targetDeviceId: String) = mutex.withLock {
+        val removed = items.removeAll { it.targetDeviceId == targetDeviceId }
+        if (removed) {
+            saveOutboxLocked()
+        }
+    }
+
     suspend fun markAttempt(seq: Long): Boolean = mutex.withLock {
         val index = items.indexOfFirst { it.seq == seq }
         if (index >= 0) {

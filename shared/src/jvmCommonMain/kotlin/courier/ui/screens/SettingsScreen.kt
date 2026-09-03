@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -26,22 +27,32 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Cookie
+import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Slider
@@ -50,10 +61,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -67,7 +82,11 @@ import kotlinx.datetime.toLocalDateTime
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.ui.semantics.Role
 import courier.platform.getPlatformActions
+import courier.ui.layout.CONTENT_MAX_WIDTH_DP
+import courier.ui.layout.LocalWidthClass
+import courier.ui.layout.WidthClass
 import courier.ui.theme.AccentCyan
+import courier.ui.theme.AccentPink
 import courier.ui.theme.CardBorderDark
 import courier.ui.theme.CardBorderFocused
 import courier.ui.theme.PrimaryIndigo
@@ -92,6 +111,24 @@ private val QUALITY_OPTIONS = listOf(
 )
 
 private val BROWSER_OPTIONS = listOf("None", "Chrome", "Edge", "Firefox", "Brave")
+
+/**
+ * Subtitle languages offered as chips.
+ *
+ * A short list rather than every code yt-dlp accepts: the point is to make the
+ * common case one tap, and a video that publishes none of the selected
+ * languages is skipped without failing.
+ */
+private val SUBTITLE_LANGUAGES = listOf(
+    "en" to "English",
+    "es" to "Spanish",
+    "fr" to "French",
+    "de" to "German",
+    "pt" to "Portuguese",
+    "ja" to "Japanese",
+    "ko" to "Korean",
+    "zh" to "Chinese"
+)
 
 private val OUTPUT_PROFILE_OPTIONS = listOf(
     Triple(
@@ -127,6 +164,9 @@ fun SettingsScreen(
     val settings by viewModel.settings.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
     val showLocationPicker by viewModel.showLocationPickerDialog.collectAsState()
+    val showRenameDialog by viewModel.showRenameDialog.collectAsState()
+    val myIdentity by viewModel.myDeviceIdentity.collectAsState()
+    val pairedDevices by viewModel.pairedDevices.collectAsState()
 
     if (showLocationPicker) {
         courier.ui.components.DownloadLocationPickerDialog(
@@ -135,6 +175,56 @@ fun SettingsScreen(
         )
     }
 
+    if (showRenameDialog) {
+        var newNameText by remember(myIdentity.deviceName) { mutableStateOf(myIdentity.deviceName) }
+        AlertDialog(
+            onDismissRequest = { viewModel.closeRenameDialog() },
+            title = { Text("Rename This Device", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(
+                        "Choose a friendly name for this device. It is shared with paired " +
+                            "devices over encrypted TLS and is not broadcast publicly.",
+                        color = TextSecondary,
+                        fontSize = 13.sp,
+                        lineHeight = 17.sp
+                    )
+                    Spacer(modifier = Modifier.height(14.dp))
+                    OutlinedTextField(
+                        value = newNameText,
+                        onValueChange = { newNameText = it },
+                        placeholder = { Text("e.g. Studio Laptop", color = TextMuted) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = AccentCyan,
+                            unfocusedBorderColor = CardBorderDark,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.submitNewDeviceName(newNameText) },
+                    enabled = newNameText.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryIndigo)
+                ) {
+                    Text("Save", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.closeRenameDialog() }) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            },
+            containerColor = SurfaceDark
+        )
+    }
+
+    val gutter = if (LocalWidthClass.current == WidthClass.COMPACT) 16.dp else 22.dp
+
     Surface(
         modifier = modifier
             .fillMaxSize()
@@ -142,12 +232,16 @@ fun SettingsScreen(
             .navigationBarsPadding(),
         color = Color.Transparent
     ) {
+        Box(
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+            contentAlignment = Alignment.TopCenter
+        ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 22.dp)
+                .widthIn(max = CONTENT_MAX_WIDTH_DP.dp)
+                .fillMaxWidth()
+                .padding(horizontal = gutter)
                 .padding(top = 18.dp, bottom = 20.dp)
-                .verticalScroll(rememberScrollState())
         ) {
             // Header
             Row(
@@ -190,9 +284,18 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             // Section: Storage & Saved Locations
-            SettingsSectionHeader(title = "Download Locations", icon = Icons.Default.Folder)
+            val activeDirSummary = settings.downloadDirectory
+                .ifBlank { viewModel.defaultDownloadDirectory }
+                .replace('\\', '/')
+                .trimEnd('/')
+                .substringAfterLast('/')
 
-            SettingsCard {
+            SettingsSection(
+                title = "Download Locations",
+                icon = Icons.Default.Folder,
+                summary = "Saving to $activeDirSummary",
+                initiallyExpanded = true
+            ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     val defaultDir = viewModel.defaultDownloadDirectory
                     val activeDir = settings.downloadDirectory.ifBlank { defaultDir }
@@ -339,9 +442,11 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             // Section: Concurrency
-            SettingsSectionHeader(title = "Downloads & Performance", icon = Icons.Default.Speed)
-
-            SettingsCard {
+            SettingsSection(
+                title = "Downloads & Performance",
+                icon = Icons.Default.Speed,
+                summary = "${settings.maxConcurrentDownloads} at a time"
+            ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -397,9 +502,12 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             // Section: Quality Preference
-            SettingsSectionHeader(title = "Default Quality", icon = Icons.Default.HighQuality)
-
-            SettingsCard {
+            SettingsSection(
+                title = "Default Quality",
+                icon = Icons.Default.HighQuality,
+                summary = QUALITY_OPTIONS.firstOrNull { it.first == settings.defaultQuality }
+                    ?.second ?: settings.defaultQuality
+            ) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -448,9 +556,12 @@ fun SettingsScreen(
             // AV1/VP9, which Premiere cannot import. The options are described by
             // outcome ("imports into Premiere") rather than by codec name, since
             // that is the decision the user is actually making.
-            SettingsSectionHeader(title = "Output Format", icon = Icons.Default.Movie)
-
-            SettingsCard {
+            SettingsSection(
+                title = "Output Format",
+                icon = Icons.Default.Movie,
+                summary = OUTPUT_PROFILE_OPTIONS.firstOrNull { it.first == settings.outputProfile }
+                    ?.second ?: ""
+            ) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -560,10 +671,286 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Section: Cookie Authentication
-            SettingsSectionHeader(title = "Browser Cookies", icon = Icons.Default.Cookie)
+            // Section: Subtitles, chapters and metadata.
+            //
+            // Every option here is an FFmpeg post-processing step, so they are
+            // disabled outright when the merger is missing rather than offered
+            // and then failing at the very end of a download.
+            val isMergerAvailable by courier.di.AppModule.binaryManager.isMergerAvailable.collectAsState()
 
-            SettingsCard {
+            val mediaExtras = buildList {
+                if (settings.writeSubtitles) add("subtitles")
+                if (settings.embedChapters) add("chapters")
+                if (settings.embedThumbnail) add("thumbnail")
+                if (settings.embedMetadata) add("metadata")
+            }
+
+            SettingsSection(
+                title = "Subtitles & Extras",
+                icon = Icons.Default.ClosedCaption,
+                summary = when {
+                    !isMergerAvailable -> "Unavailable — FFmpeg is missing"
+                    mediaExtras.isEmpty() -> "Nothing extra embedded"
+                    else -> "Embedding ${mediaExtras.joinToString(", ")}"
+                }
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    if (!isMergerAvailable) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(WarningOrange.copy(alpha = 0.13f), RoundedCornerShape(10.dp))
+                                .border(1.dp, WarningOrange.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = WarningOrange,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                "These all need FFmpeg, which is not installed. " +
+                                    "Update the engine components below to enable them.",
+                                color = WarningOrange,
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp
+                            )
+                        }
+                    }
+
+                    SettingToggle(
+                        title = "Subtitles",
+                        detail = "Embedded into the video, including auto-generated captions. " +
+                            "Skipped for audio-only downloads.",
+                        checked = settings.writeSubtitles,
+                        enabled = isMergerAvailable,
+                        onCheckedChange = { viewModel.updateWriteSubtitles(it) }
+                    )
+
+                    if (settings.writeSubtitles && isMergerAvailable) {
+                        Column {
+                            Text(
+                                "LANGUAGES",
+                                color = AccentCyan,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                for ((code, label) in SUBTITLE_LANGUAGES) {
+                                    val isOn = settings.subtitleLanguages.contains(code)
+                                    Box(
+                                        modifier = Modifier
+                                            .background(
+                                                if (isOn) PrimaryIndigo.copy(alpha = 0.3f) else SurfaceVariantDark,
+                                                RoundedCornerShape(10.dp)
+                                            )
+                                            .border(
+                                                1.dp,
+                                                if (isOn) AccentCyan else CardBorderDark,
+                                                RoundedCornerShape(10.dp)
+                                            )
+                                            .clickable { viewModel.toggleSubtitleLanguage(code) }
+                                            .padding(horizontal = 12.dp, vertical = 7.dp)
+                                    ) {
+                                        Text(
+                                            text = label,
+                                            color = if (isOn) Color.White else TextSecondary,
+                                            fontSize = 12.sp,
+                                            fontWeight = if (isOn) FontWeight.Bold else FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                "A language with no subtitles published is skipped without failing " +
+                                    "the download.",
+                                color = TextMuted,
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp
+                            )
+                        }
+                    }
+
+                    SettingToggle(
+                        title = "Chapters",
+                        detail = "Chapter markers, so players and editors can jump between sections.",
+                        checked = settings.embedChapters,
+                        enabled = isMergerAvailable,
+                        onCheckedChange = { viewModel.updateEmbedChapters(it) }
+                    )
+
+                    SettingToggle(
+                        title = "Cover art",
+                        detail = "The video's thumbnail, embedded as cover art. Useful for audio files.",
+                        checked = settings.embedThumbnail,
+                        enabled = isMergerAvailable,
+                        onCheckedChange = { viewModel.updateEmbedThumbnail(it) }
+                    )
+
+                    SettingToggle(
+                        title = "Title & uploader metadata",
+                        detail = "Writes the title, uploader and description into the file's own tags.",
+                        checked = settings.embedMetadata,
+                        enabled = isMergerAvailable,
+                        onCheckedChange = { viewModel.updateEmbedMetadata(it) }
+                    )
+
+                    Text(
+                        "These apply to new downloads. Anything already queued keeps the " +
+                            "settings it was created with.",
+                        color = TextMuted,
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Section: Device Link
+            SettingsSection(
+                title = "Device Link",
+                icon = Icons.Default.Devices,
+                summary = if (!settings.deviceLinkEnabled) {
+                    "Off"
+                } else when (pairedDevices.size) {
+                    0 -> "On • no paired devices"
+                    1 -> "On • 1 paired device"
+                    else -> "On • ${pairedDevices.size} paired devices"
+                }
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    SettingToggle(
+                        title = "Enable Device Link",
+                        detail = "Off closes the listening socket and disconnects every paired " +
+                            "device. Pairings are kept.",
+                        checked = settings.deviceLinkEnabled,
+                        onCheckedChange = { viewModel.updateDeviceLinkEnabled(it) }
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(SurfaceVariantDark.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                            .border(1.dp, CardBorderDark, RoundedCornerShape(12.dp))
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (myIdentity.deviceType == "phone") {
+                                Icons.Default.PhoneAndroid
+                            } else {
+                                Icons.Default.Computer
+                            },
+                            contentDescription = null,
+                            tint = AccentCyan,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = myIdentity.deviceName,
+                                color = TextPrimary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "This device • port ${myIdentity.tcpPort}",
+                                color = TextMuted,
+                                fontSize = 11.sp
+                            )
+                        }
+                        IconButton(
+                            onClick = { viewModel.openRenameDialog() },
+                            modifier = Modifier
+                                .size(34.dp)
+                                .background(SurfaceCard, RoundedCornerShape(8.dp))
+                                .border(1.dp, CardBorderDark, RoundedCornerShape(8.dp))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Rename this device",
+                                tint = AccentCyan,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    if (pairedDevices.isEmpty()) {
+                        Text(
+                            "No paired devices. Pair one from the Devices tab.",
+                            color = TextMuted,
+                            fontSize = 12.sp
+                        )
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                "PAIRED",
+                                color = AccentCyan,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                            for (device in pairedDevices) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = if (device.deviceType == "phone") {
+                                            Icons.Default.PhoneAndroid
+                                        } else {
+                                            Icons.Default.Computer
+                                        },
+                                        contentDescription = null,
+                                        tint = TextMuted,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = device.deviceName,
+                                        color = TextSecondary,
+                                        fontSize = 12.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                            Text(
+                                "Unpair from the Devices tab.",
+                                color = TextMuted,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Section: Cookie Authentication
+            SettingsSection(
+                title = "Browser Cookies",
+                icon = Icons.Default.Cookie,
+                summary = if (settings.selectedCookieBrowser.equals("None", ignoreCase = true) ||
+                    settings.selectedCookieBrowser.isBlank()
+                ) "Not using browser cookies" else "Using ${settings.selectedCookieBrowser}"
+            ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Text(
                         "Import Cookies from Browser",
@@ -613,9 +1000,12 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             // Section: App Updates
-            SettingsSectionHeader(title = "App Updates", icon = Icons.Default.SystemUpdate)
-
-            SettingsCard {
+            SettingsSection(
+                title = "App Updates",
+                icon = Icons.Default.SystemUpdate,
+                summary = "v${AppVersion.VERSION_NAME}" +
+                    if (settings.autoCheckAppUpdates) " • checking automatically" else " • manual checks only"
+            ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     // Row 1: Automatic Updates Switch
                     Row(
@@ -860,9 +1250,11 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             // Section: Engine & Updates
-            SettingsSectionHeader(title = "Engine Components", icon = Icons.Default.SystemUpdate)
-
-            SettingsCard {
+            SettingsSection(
+                title = "Engine Components",
+                icon = Icons.Default.SystemUpdate,
+                summary = "yt-dlp ${uiState.binaryVersion.ifBlank { "embedded" }}"
+            ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1003,30 +1395,121 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
         }
+        }
     }
 }
 
+/**
+ * One collapsible settings group.
+ *
+ * The screen was a single scroll of eight always-open cards, so finding
+ * anything below the fold meant scrolling past everything above it. Collapsed
+ * headers turn that into a contents list: [summary] carries the current value
+ * so the common case — checking a setting rather than changing it — needs no
+ * expansion at all.
+ */
 @Composable
-private fun SettingsSectionHeader(
+private fun SettingsSection(
     title: String,
-    icon: ImageVector
+    icon: ImageVector,
+    summary: String,
+    initiallyExpanded: Boolean = false,
+    content: @Composable () -> Unit
+) {
+    var expanded by rememberSaveable(title) { mutableStateOf(initiallyExpanded) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(SurfaceCard, RoundedCornerShape(18.dp))
+                .border(1.dp, CardBorderDark, RoundedCornerShape(18.dp))
+                .clickable { expanded = !expanded }
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = AccentCyan,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = TextPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                if (summary.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = summary,
+                        color = TextMuted,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Icon(
+                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = if (expanded) "Collapse $title" else "Expand $title",
+                tint = TextMuted,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        if (expanded) {
+            Spacer(modifier = Modifier.height(8.dp))
+            SettingsCard { content() }
+        }
+    }
+}
+
+/** A labelled on/off row, the shape most of these settings share. */
+@Composable
+private fun SettingToggle(
+    title: String,
+    detail: String,
+    checked: Boolean,
+    enabled: Boolean = true,
+    onCheckedChange: (Boolean) -> Unit
 ) {
     Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(bottom = 10.dp, start = 2.dp)
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = AccentCyan,
-            modifier = Modifier.size(18.dp)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = title,
-            color = TextPrimary,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = if (enabled) TextPrimary else TextMuted,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = detail,
+                color = TextMuted,
+                fontSize = 11.sp,
+                lineHeight = 15.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = AccentCyan,
+                uncheckedThumbColor = TextMuted,
+                uncheckedTrackColor = SurfaceVariantDark
+            )
         )
     }
 }

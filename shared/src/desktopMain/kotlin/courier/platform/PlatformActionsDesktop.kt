@@ -5,8 +5,6 @@ import java.awt.Toolkit
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.StringSelection
 import java.io.File
-import javax.swing.JFileChooser
-import javax.swing.UIManager
 
 class PlatformActionsDesktop : PlatformActions {
     override fun getClipboardText(): String? {
@@ -80,26 +78,6 @@ class PlatformActionsDesktop : PlatformActions {
         }
     }
 
-    override suspend fun chooseDirectory(): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-        try {
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName())
-            val chooser = JFileChooser().apply {
-                fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
-                dialogTitle = "Select Download Destination Folder"
-                isAcceptAllFileFilterUsed = false
-            }
-            val result = chooser.showOpenDialog(null)
-            if (result == JFileChooser.APPROVE_OPTION) {
-                chooser.selectedFile.absolutePath
-            } else {
-                null
-            }
-        } catch (e: Exception) {
-            println("Error choosing directory: ${e.message}")
-            null
-        }
-    }
-
     override fun getDefaultDownloadDirectory(): String {
         val userHome = System.getProperty("user.home")
         val downloadsDir = File(userHome, "Downloads/Courier")
@@ -111,14 +89,68 @@ class PlatformActionsDesktop : PlatformActions {
 
     override fun getStandardMediaRoots(): List<String> {
         val userHome = File(System.getProperty("user.home"))
-        val roots = listOf(
+        val roots = mutableListOf(
             File(userHome, "Downloads"),
             File(userHome, "Videos"),
             File(userHome, "Pictures"),
             File(userHome, "Music"),
             File(userHome, "Documents")
         )
-        return roots.filter { it.exists() }.map { it.absolutePath }
+        // Every drive as well, so a second disk is reachable from the picker.
+        // Without these, "somewhere on D:" could only be expressed through the
+        // Swing chooser this replaces.
+        try {
+            for (root in File.listRoots()) {
+                if (root != null && root.exists()) roots.add(root)
+            }
+        } catch (_: Exception) {}
+
+        return roots.filter { it.exists() }.map { it.absolutePath }.distinct()
+    }
+
+    override fun canBrowseFilesystem(): Boolean = true
+
+    override fun listSubdirectories(path: String): List<String> {
+        return try {
+            File(path).listFiles()
+                ?.filter { it.isDirectory && !it.isHidden }
+                ?.sortedBy { it.name.lowercase() }
+                ?.map { it.absolutePath }
+                ?: emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    override fun parentDirectory(path: String): String? {
+        return try {
+            File(path).absoluteFile.parentFile?.absolutePath
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    override fun createSubdirectory(parent: String, name: String): Result<String> {
+        return try {
+            val clean = name.trim()
+            // Rejected rather than sanitised: silently creating "Clips" when
+            // the user typed "../Clips" would put files somewhere they did not
+            // ask for.
+            if (clean.isBlank() || clean.contains('/') || clean.contains('\\') || clean == "..") {
+                return Result.failure(Exception("Folder name cannot contain a path separator"))
+            }
+            val dir = File(parent, clean)
+            if (dir.exists()) {
+                if (dir.isDirectory) Result.success(dir.absolutePath)
+                else Result.failure(Exception("A file of that name already exists"))
+            } else if (dir.mkdirs()) {
+                Result.success(dir.absolutePath)
+            } else {
+                Result.failure(Exception("Could not create ${dir.absolutePath}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception(e.message ?: "Could not create folder"))
+        }
     }
 
     override suspend fun probeDirectoryWritable(path: String): Result<Unit> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {

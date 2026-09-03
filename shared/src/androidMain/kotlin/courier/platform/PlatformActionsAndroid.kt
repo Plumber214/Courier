@@ -149,10 +149,9 @@ class PlatformActionsAndroid : PlatformActions {
         }
     }
 
-    override suspend fun chooseDirectory(): String? {
-        // Android uses the state-driven DownloadLocationPickerDialog
-        return null
-    }
+    // canBrowseFilesystem() stays false: scoped storage means the app cannot
+    // enumerate arbitrary directories, so the picker offers a media root plus a
+    // folder name rather than a browser that would show everything as empty.
 
     override fun getStandardMediaRoots(): List<String> {
         val roots = listOf(

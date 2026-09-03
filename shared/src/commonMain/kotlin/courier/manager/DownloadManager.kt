@@ -146,7 +146,12 @@ class DownloadManager(
             selectedVcodec = format?.vcodec,
             formatId = format?.formatId,
             destinationDir = destinationDir,
-            downloadPlaylist = downloadPlaylist
+            downloadPlaylist = downloadPlaylist,
+            writeSubtitles = settings.value.writeSubtitles,
+            subtitleLanguages = settings.value.subtitleLanguages,
+            embedChapters = settings.value.embedChapters,
+            embedThumbnail = settings.value.embedThumbnail,
+            embedMetadata = settings.value.embedMetadata
         )
 
         repository.addOrUpdate(item)
@@ -174,6 +179,71 @@ class DownloadManager(
             }
             triggerQueueProcessing()
         }
+    }
+
+    /**
+     * Stops [id] but keeps everything it has fetched.
+     *
+     * The process is destroyed exactly as Cancel destroys it — yt-dlp has no
+     * pause signal — but the item lands in [DownloadStatus.PAUSED] rather than
+     * CANCELLED, and the `.part` file is left in place. Resuming re-runs the
+     * same command, and yt-dlp continues from that file rather than starting
+     * over: `--continue` is its default and nothing here passes `--no-part`.
+     *
+     * The last live progress is written onto the item first. Progress during a
+     * download lives in the repository's progress map, which is cleared when
+     * the job stops, so without this a paused download would display 0%.
+     */
+    fun pauseDownload(id: String) {
+        scope.launch {
+            val lastProgress = repository.progressMap.value[id]?.progressPercent
+
+            val jobToCancel = stateMutex.withLock {
+                val job = activeJobs.remove(id)
+                synchronized(lastMetricUpdateTimes) {
+                    lastMetricUpdateTimes.remove(id)
+                }
+                job
+            }
+            jobToCancel?.cancel()
+            engine.cancelDownload(id)
+            jobToCancel?.join()
+            repository.clearProgress(id)
+
+            val item = repository.downloads.value.find { it.id == id }
+            if (item != null && !item.isFinished) {
+                repository.addOrUpdate(
+                    item.copy(
+                        status = DownloadStatus.PAUSED,
+                        progressPercent = lastProgress ?: item.progressPercent,
+                        speedFormatted = null,
+                        etaFormatted = null,
+                        errorMessage = null
+                    )
+                )
+            }
+            // A freed slot goes to whatever is queued behind it.
+            triggerQueueProcessing()
+        }
+    }
+
+    /**
+     * Puts a paused download back in the queue.
+     *
+     * Distinct from [retryDownload], which resets progress to zero: a resume
+     * keeps the recorded percentage, because the bytes on disk are still there
+     * and yt-dlp will not re-fetch them.
+     */
+    fun resumeDownload(id: String) {
+        val item = repository.downloads.value.find { it.id == id } ?: return
+        if (item.status != DownloadStatus.PAUSED) return
+        repository.addOrUpdate(
+            item.copy(
+                status = DownloadStatus.QUEUED,
+                errorMessage = null
+            )
+        )
+        triggerQueueProcessing()
     }
 
     fun cancelAll() {

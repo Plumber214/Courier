@@ -197,6 +197,61 @@ object FormatSelector {
         return listOf("-f", "bestaudio/best", "-x", "--audio-format", target)
     }
 
+    /**
+     * Subtitle, chapter, thumbnail and metadata arguments for one download.
+     *
+     * Everything here is a post-processing step, and every post-processor
+     * except sidecar subtitle files needs FFmpeg. When the merger is missing,
+     * passing them produces a download that fails at the very end — after all
+     * the bytes have been fetched — so [mergerAvailable] gates them and the
+     * subtitle option degrades to writing `.srt` files beside the video, which
+     * yt-dlp can do on its own.
+     *
+     * Subtitles and chapters are skipped for audio-only downloads: no audio
+     * container yt-dlp writes carries either, so the flags would only leave
+     * stray subtitle files behind.
+     */
+    fun mediaOptionArgs(
+        writeSubtitles: Boolean,
+        subtitleLanguages: List<String>,
+        embedChapters: Boolean,
+        embedThumbnail: Boolean,
+        embedMetadata: Boolean,
+        isAudioOnly: Boolean,
+        mergerAvailable: Boolean
+    ): List<String> {
+        val args = mutableListOf<String>()
+
+        if (writeSubtitles && !isAudioOnly) {
+            val langs = subtitleLanguages
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .distinct()
+                .ifEmpty { listOf("en") }
+
+            // --write-auto-subs as well as --write-subs: most YouTube videos
+            // have only machine captions, so without this the toggle appears to
+            // do nothing on the majority of downloads.
+            args.addAll(listOf("--sub-langs", langs.joinToString(","), "--write-auto-subs"))
+
+            if (mergerAvailable) {
+                // --embed-subs implies --write-subs and removes the sidecar
+                // files afterwards, which is what "embed" should mean.
+                args.add("--embed-subs")
+            } else {
+                args.add("--write-subs")
+            }
+        }
+
+        if (mergerAvailable) {
+            if (embedChapters && !isAudioOnly) args.add("--embed-chapters")
+            if (embedThumbnail) args.add("--embed-thumbnail")
+            if (embedMetadata) args.add("--embed-metadata")
+        }
+
+        return args
+    }
+
     /** Sample rate every professional NLE and broadcast spec works in. */
     private const val EDITING_SAMPLE_RATE = "48000"
 

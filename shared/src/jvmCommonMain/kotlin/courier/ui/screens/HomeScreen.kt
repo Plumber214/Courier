@@ -137,6 +137,7 @@ fun HomeScreen(
 
     val activeCount = downloads.count { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.MERGING }
     val queuedCount = downloads.count { it.status == DownloadStatus.QUEUED }
+    val pausedCount = downloads.count { it.status == DownloadStatus.PAUSED }
     val completedCount = downloads.count { it.status == DownloadStatus.COMPLETED }
 
     Surface(
@@ -210,6 +211,7 @@ fun HomeScreen(
                     val statusParts = buildList {
                         if (activeCount > 0) add("$activeCount Active")
                         if (queuedCount > 0) add("$queuedCount Queued")
+                        if (pausedCount > 0) add("$pausedCount Paused")
                     }
                     val statusText = statusParts.joinToString(" • ")
 
@@ -587,6 +589,8 @@ fun HomeScreen(
                                 item = item,
                                 onCancel = { downloadManager.cancelDownload(item.id) },
                                 onRetry = { downloadManager.retryDownload(item.id) },
+                                onPause = { downloadManager.pauseDownload(item.id) },
+                                onResume = { downloadManager.resumeDownload(item.id) },
                                 onRemoveFromList = {
                                     coroutineScope.launch {
                                         dismissingItemIds.add(item.id)

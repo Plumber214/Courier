@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -160,6 +161,8 @@ fun DownloadItemCard(
     item: DownloadItem,
     onCancel: () -> Unit,
     onRetry: () -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
     onRemoveFromList: () -> Unit,
     onDeleteFile: () -> Unit,
     onPreviewMedia: () -> Unit,
@@ -220,6 +223,8 @@ fun DownloadItemCard(
             onOpenFolder = onOpenFolder,
             onRetry = onRetry,
             onCancel = onCancel,
+            onPause = onPause,
+            onResume = onResume,
             onRemoveFromList = onRemoveFromList,
             onRequestDeleteFile = { confirmDeleteFile = true }
         )
@@ -321,6 +326,31 @@ fun DownloadItemCard(
                             background = PrimaryIndigo,
                             borderColor = null,
                             onClick = onRetry
+                        )
+                    }
+
+                    if (item.status == DownloadStatus.PAUSED) {
+                        CircleActionButton(
+                            icon = Icons.Default.PlayArrow,
+                            contentDescription = "Resume",
+                            tint = Color.White,
+                            background = PrimaryIndigo,
+                            borderColor = null,
+                            onClick = onResume
+                        )
+                    }
+
+                    // Pause only while bytes are actually moving. There is
+                    // nothing to keep from a queued item, and the merge is a
+                    // single FFmpeg run that cannot be continued partway.
+                    if (item.status == DownloadStatus.DOWNLOADING) {
+                        CircleActionButton(
+                            icon = Icons.Default.Pause,
+                            contentDescription = "Pause",
+                            tint = WarningOrange,
+                            background = SurfaceVariantDark,
+                            borderColor = CardBorderDark,
+                            onClick = onPause
                         )
                     }
 
@@ -613,6 +643,40 @@ private fun ItemStatusBlock(
                 )
             }
         }
+        DownloadStatus.PAUSED -> {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                LinearProgressIndicator(
+                    progress = { animatedProgress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp)),
+                    color = WarningOrange,
+                    trackColor = SurfaceVariantDark,
+                    strokeCap = StrokeCap.Round
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Pause,
+                        contentDescription = null,
+                        tint = WarningOrange,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    // Says the partial file is kept, because the difference
+                    // between this and Cancel is exactly that.
+                    Text(
+                        "Paused at ${item.progressPercent.toInt()}% — resumes from here",
+                        color = WarningOrange,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
         DownloadStatus.CANCELLED -> {
             Text(
                 "Cancelled",
@@ -659,6 +723,8 @@ private fun ItemOverflowMenu(
     onOpenFolder: () -> Unit,
     onRetry: () -> Unit,
     onCancel: () -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
     onRemoveFromList: () -> Unit,
     onRequestDeleteFile: () -> Unit
 ) {
@@ -712,6 +778,30 @@ private fun ItemOverflowMenu(
                     ) {
                         onExpandedChange(false)
                         onRetry()
+                    }
+                }
+
+                if (item.status == DownloadStatus.DOWNLOADING) {
+                    MenuAction(
+                        label = "Pause",
+                        icon = Icons.Default.Pause,
+                        tint = WarningOrange,
+                        labelColor = TextPrimary
+                    ) {
+                        onExpandedChange(false)
+                        onPause()
+                    }
+                }
+
+                if (item.status == DownloadStatus.PAUSED) {
+                    MenuAction(
+                        label = "Resume",
+                        icon = Icons.Default.PlayArrow,
+                        tint = AccentCyan,
+                        labelColor = AccentCyan
+                    ) {
+                        onExpandedChange(false)
+                        onResume()
                     }
                 }
 

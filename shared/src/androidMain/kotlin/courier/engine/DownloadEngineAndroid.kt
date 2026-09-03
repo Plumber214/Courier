@@ -151,6 +151,32 @@ class DownloadEngineAndroid : DownloadEngine {
                 // Note: --concurrent-fragments is omitted on Android (unlike desktop)
                 // to avoid socket exhaustion, high memory usage during chunk assembly,
                 // and battery/thermal throttling on mobile chipsets.
+
+                // youtubedl-android bundles FFmpeg, so the embedding
+                // post-processors are always available here.
+                val mediaArgs = FormatSelector.mediaOptionArgs(
+                    writeSubtitles = item.writeSubtitles,
+                    subtitleLanguages = item.subtitleLanguages,
+                    embedChapters = item.embedChapters,
+                    embedThumbnail = item.embedThumbnail,
+                    embedMetadata = item.embedMetadata,
+                    isAudioOnly = item.isAudioOnly || item.mediaType == MediaType.AUDIO,
+                    mergerAvailable = true
+                )
+                // The list is flat; only --sub-langs takes a value, and a
+                // language list never starts with "--", so a following token
+                // that is not itself a flag is that option's argument.
+                var m = 0
+                while (m < mediaArgs.size) {
+                    val next = mediaArgs.getOrNull(m + 1)
+                    if (next != null && !next.startsWith("--")) {
+                        r.addOption(mediaArgs[m], next)
+                        m += 2
+                    } else {
+                        r.addOption(mediaArgs[m])
+                        m += 1
+                    }
+                }
                 return r
             }
 

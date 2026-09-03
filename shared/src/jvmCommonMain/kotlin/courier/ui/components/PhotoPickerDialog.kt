@@ -324,18 +324,9 @@ fun PhotoPickerDialog(
                         modifier = Modifier
                             .background(SurfaceVariantDark, RoundedCornerShape(6.dp))
                             .border(1.dp, CardBorderDark, RoundedCornerShape(6.dp))
-                            .clickable {
-                                if (getPlatformActions().isAndroid()) {
-                                    showLocationPicker = true
-                                } else {
-                                    scope.launch {
-                                        val chosen = getPlatformActions().chooseDirectory()
-                                        if (!chosen.isNullOrBlank()) {
-                                            selectedLocation = chosen
-                                        }
-                                    }
-                                }
-                            }
+                            // One picker on both platforms now — the desktop
+                            // branch used to open a Swing file chooser.
+                            .clickable { showLocationPicker = true }
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text(

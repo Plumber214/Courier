@@ -50,5 +50,23 @@ data class AppSettings(
     val transcodeCodec: TranscodeCodec = TranscodeCodec.H264,
     val lastEngineUpdateCheckEpochMs: Long = 0L,
     val autoCheckAppUpdates: Boolean = true,
-    val lastAppUpdateCheckEpochMs: Long = 0L
+    val lastAppUpdateCheckEpochMs: Long = 0L,
+
+    /**
+     * Whether Device Link runs at all.
+     *
+     * The subsystem is already dormant with no paired devices and the Devices
+     * tab closed, but there was no way to say "never" — someone who does not
+     * want a listening socket on their machine had to unpair everything and
+     * hope.
+     */
+    val deviceLinkEnabled: Boolean = true,
+
+    // Media options. Off by default: each one costs time or a re-mux, and the
+    // v1.6 behaviour is what existing users are expecting from an update.
+    val writeSubtitles: Boolean = false,
+    val subtitleLanguages: List<String> = listOf("en"),
+    val embedChapters: Boolean = false,
+    val embedThumbnail: Boolean = false,
+    val embedMetadata: Boolean = false
 )

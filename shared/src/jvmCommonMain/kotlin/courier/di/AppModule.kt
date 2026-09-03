@@ -26,7 +26,12 @@ object AppModule {
     }
 
     val deviceLinkManager: courier.link.DeviceLinkManager by lazy {
-        courier.link.DeviceLinkManager.getInstance()
+        courier.link.DeviceLinkManager.getInstance().apply {
+            // Applied before anything can wake the subsystem, so a user who
+            // turned Device Link off does not get a listening socket for the
+            // moment between construction and the settings screen loading.
+            setLinkEnabled(settingsRepository.settings.value.deviceLinkEnabled)
+        }
     }
 
     val linkDownloadBridge: courier.link.LinkDownloadBridge by lazy {

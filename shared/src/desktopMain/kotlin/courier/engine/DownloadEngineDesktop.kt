@@ -171,6 +171,19 @@ class DownloadEngineDesktop : DownloadEngine {
             if (ffmpeg != null) {
                 addAll(listOf("--ffmpeg-location", ffmpeg.parentFile.absolutePath))
             }
+            // Applied to every pass, including a carousel's photo pass, where
+            // --embed-metadata is the only one that does anything.
+            addAll(
+                FormatSelector.mediaOptionArgs(
+                    writeSubtitles = item.writeSubtitles,
+                    subtitleLanguages = item.subtitleLanguages,
+                    embedChapters = item.embedChapters,
+                    embedThumbnail = item.embedThumbnail,
+                    embedMetadata = item.embedMetadata,
+                    isAudioOnly = item.isAudioOnly || item.mediaType == MediaType.AUDIO,
+                    mergerAvailable = ffmpeg != null
+                )
+            )
             add(item.url)
             return this
         }

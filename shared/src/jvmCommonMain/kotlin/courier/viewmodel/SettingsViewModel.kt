@@ -36,6 +36,63 @@ class SettingsViewModel(
     private val _showLocationPickerDialog = MutableStateFlow(false)
     val showLocationPickerDialog: StateFlow<Boolean> = _showLocationPickerDialog.asStateFlow()
 
+    // Device Link, surfaced here so its identity and switch sit with the rest
+    // of the app's configuration rather than only on a tab you have to know to
+    // open.
+    private val linkManager get() = courier.di.AppModule.deviceLinkManager
+    val myDeviceIdentity: StateFlow<courier.link.DeviceIdentity> get() = linkManager.myIdentity
+    val pairedDevices: StateFlow<List<courier.link.PairedDevice>> get() = linkManager.trustStore.pairedDevices
+
+    private val _showRenameDialog = MutableStateFlow(false)
+    val showRenameDialog: StateFlow<Boolean> = _showRenameDialog.asStateFlow()
+
+    fun openRenameDialog() {
+        _showRenameDialog.value = true
+    }
+
+    fun closeRenameDialog() {
+        _showRenameDialog.value = false
+    }
+
+    fun submitNewDeviceName(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return
+        linkManager.updateDeviceName(trimmed)
+        _showRenameDialog.value = false
+    }
+
+    fun updateDeviceLinkEnabled(enabled: Boolean) {
+        settingsRepository.updateSettings(settings.value.copy(deviceLinkEnabled = enabled))
+        linkManager.setLinkEnabled(enabled)
+    }
+
+    fun updateWriteSubtitles(enabled: Boolean) {
+        settingsRepository.updateSettings(settings.value.copy(writeSubtitles = enabled))
+    }
+
+    fun toggleSubtitleLanguage(code: String) {
+        val current = settings.value.subtitleLanguages.toMutableList()
+        if (!current.remove(code)) {
+            current.add(code)
+        }
+        // Never leave the list empty while subtitles are on: yt-dlp would
+        // then be asked for no languages and quietly fetch nothing.
+        val resolved = current.ifEmpty { listOf("en") }
+        settingsRepository.updateSettings(settings.value.copy(subtitleLanguages = resolved))
+    }
+
+    fun updateEmbedChapters(enabled: Boolean) {
+        settingsRepository.updateSettings(settings.value.copy(embedChapters = enabled))
+    }
+
+    fun updateEmbedThumbnail(enabled: Boolean) {
+        settingsRepository.updateSettings(settings.value.copy(embedThumbnail = enabled))
+    }
+
+    fun updateEmbedMetadata(enabled: Boolean) {
+        settingsRepository.updateSettings(settings.value.copy(embedMetadata = enabled))
+    }
+
     fun showLocationPicker() {
         _showLocationPickerDialog.value = true
     }
@@ -91,17 +148,14 @@ class SettingsViewModel(
         )
     }
 
+    /**
+     * Opens the in-app folder picker on both platforms.
+     *
+     * Desktop used to open a Swing `JFileChooser` here: a system dialog in the
+     * platform look and feel, dropped into the middle of a dark Compose app.
+     */
     fun browseAndAddLocation() {
-        if (getPlatformActions().isAndroid()) {
-            showLocationPicker()
-        } else {
-            scope.launch {
-                val chosen = getPlatformActions().chooseDirectory()
-                if (!chosen.isNullOrBlank()) {
-                    updateDownloadDirectory(chosen)
-                }
-            }
-        }
+        showLocationPicker()
     }
 
     fun updateMaxConcurrentDownloads(limit: Int) {

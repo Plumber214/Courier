@@ -55,7 +55,17 @@ data class DownloadItem(
      * opposite, which turned one intended download into dozens with no warning
      * and no per-item quality choice.
      */
-    val downloadPlaylist: Boolean = false
+    val downloadPlaylist: Boolean = false,
+
+    // Media options, captured at enqueue time for the same reason as
+    // outputProfile: changing a setting mid-queue must not alter a download
+    // already waiting, and a retry after a restart has to reproduce the
+    // original request exactly.
+    val writeSubtitles: Boolean = false,
+    val subtitleLanguages: List<String> = emptyList(),
+    val embedChapters: Boolean = false,
+    val embedThumbnail: Boolean = false,
+    val embedMetadata: Boolean = false
 ) {
     val isFinished: Boolean
         get() = status == DownloadStatus.COMPLETED || status == DownloadStatus.FAILED || status == DownloadStatus.CANCELLED

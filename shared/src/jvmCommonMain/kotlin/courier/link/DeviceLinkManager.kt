@@ -95,6 +95,17 @@ class DeviceLinkManager(
     private val _isDevicesTabActive = MutableStateFlow(false)
     val isDevicesTabActive: StateFlow<Boolean> = _isDevicesTabActive.asStateFlow()
 
+    /**
+     * The master switch for the whole subsystem.
+     *
+     * Dormancy already keeps it quiet with no paired devices and the Devices
+     * tab closed, but there was no way to say "never" — someone who does not
+     * want a listening socket on their machine had to unpair everything and
+     * hope nothing woke it up.
+     */
+    private val _isLinkEnabled = MutableStateFlow(true)
+    val isLinkEnabled: StateFlow<Boolean> = _isLinkEnabled.asStateFlow()
+
     private var isSubsystemRunning = false
     private val reconnectSignal = Channel<Unit>(Channel.CONFLATED)
 
@@ -149,8 +160,12 @@ class DeviceLinkManager(
     init {
         // Lifecycle manager: Gate the subsystem on having a paired device or active tab (Decision F1)
         scope.launch {
-            combine(trustStore.pairedDevices, _isDevicesTabActive) { paired, tabActive ->
-                paired.isNotEmpty() || tabActive
+            combine(
+                trustStore.pairedDevices,
+                _isDevicesTabActive,
+                _isLinkEnabled
+            ) { paired, tabActive, enabled ->
+                enabled && (paired.isNotEmpty() || tabActive)
             }.collect { shouldRun ->
                 if (shouldRun && !isSubsystemRunning) {
                     startInternal()
@@ -176,8 +191,31 @@ class DeviceLinkManager(
         }
     }
 
+    /**
+     * Turns Device Link on or off entirely.
+     *
+     * Off tears down the listening socket, the discovery listener and every
+     * live link immediately, and nothing brings them back until this is on
+     * again — including opening the Devices tab. Pairings are kept; the switch
+     * is about whether the machine is reachable, not about forgetting anyone.
+     */
+    fun setLinkEnabled(enabled: Boolean) {
+        if (_isLinkEnabled.value == enabled) return
+        _isLinkEnabled.value = enabled
+        if (!enabled) {
+            discovery.stopActiveAnnouncing()
+            stopInternal()
+        } else if (trustStore.pairedDevices.value.isNotEmpty() || _isDevicesTabActive.value) {
+            startInternal()
+            if (_isDevicesTabActive.value) {
+                discovery.startActiveAnnouncing(1500L)
+            }
+        }
+    }
+
     fun setDevicesTabActive(active: Boolean) {
         _isDevicesTabActive.value = active
+        if (!_isLinkEnabled.value) return
         if (active) {
             startInternal()
             discovery.startActiveAnnouncing(1500L)
@@ -197,6 +235,9 @@ class DeviceLinkManager(
     }
 
     private fun startInternal() {
+        // Every wake path funnels through here, so the master switch is
+        // enforced in one place rather than at each caller.
+        if (!_isLinkEnabled.value) return
         if (isSubsystemRunning) return
         isSubsystemRunning = true
         linkServer.start(tcpPort)

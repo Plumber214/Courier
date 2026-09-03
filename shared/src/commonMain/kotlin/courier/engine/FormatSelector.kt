@@ -181,6 +181,22 @@ object FormatSelector {
         return !isEditorFriendlyCodec(selectedVcodec)
     }
 
+    /**
+     * yt-dlp arguments for an audio-only download.
+     *
+     * Both engines previously hard-coded `--audio-format mp3`, so the picker's
+     * "Best Audio Quality (M4A / Original)" option produced an MP3 — the choice
+     * was collected, displayed, and then ignored.
+     *
+     * `best` here means "keep what the source already is" rather than "pick the
+     * highest bitrate": yt-dlp only re-encodes when the container demands it, so
+     * YouTube's AAC stays AAC instead of making a lossy second generation.
+     */
+    fun audioArgs(formatId: String?): List<String> {
+        val target = if (formatId.equals("mp3", ignoreCase = true)) "mp3" else "best"
+        return listOf("-f", "bestaudio/best", "-x", "--audio-format", target)
+    }
+
     /** Sample rate every professional NLE and broadcast spec works in. */
     private const val EDITING_SAMPLE_RATE = "48000"
 

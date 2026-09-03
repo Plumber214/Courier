@@ -184,7 +184,7 @@ class DownloadEngineDesktop : DownloadEngine {
 
         if (item.isAudioOnly || item.mediaType == MediaType.AUDIO) {
             passes.add(baseCommand().apply {
-                addAll(listOf("-f", "bestaudio/best", "-x", "--audio-format", "mp3"))
+                addAll(FormatSelector.audioArgs(formatId))
             }.finish())
         } else if (item.mediaType == MediaType.IMAGE) {
             passes.add(baseCommand().apply { addPhotoArgs() }.finish())
@@ -259,6 +259,10 @@ class DownloadEngineDesktop : DownloadEngine {
         val report: (Float, String?, String?, String?, String?) -> Unit = { p, s, e, d, t ->
             onProgress(scaled(p), s, e, d, t)
         }
+
+        // Anything this pass produces is written after this instant. Used to
+        // bound the last-resort output lookup below.
+        val passStartedAtMs = System.currentTimeMillis()
 
         try {
             val pb = ProcessBuilder(cmd)
@@ -344,7 +348,7 @@ class DownloadEngineDesktop : DownloadEngine {
                 if (existing.isNotEmpty()) return@withContext Result.success(existing)
 
                 val fallback = finalFilePath?.takeIf { File(it).isFile }
-                    ?: findNewestFileInDir(outDir)
+                    ?: findFileWrittenDuringPass(outDir, passStartedAtMs)
                 if (fallback != null && File(fallback).isFile) {
                     Result.success(listOf(fallback))
                 } else {
@@ -413,13 +417,32 @@ class DownloadEngineDesktop : DownloadEngine {
         } catch (_: Exception) {}
     }
 
-    private fun findNewestFileInDir(dir: File): String? {
+    /**
+     * Last-resort lookup for an output file whose path could not be parsed from
+     * yt-dlp's log: the newest file in [dir] that this pass could have written.
+     *
+     * The previous version fell back to the newest file in the directory
+     * regardless of age. Anything the user had saved there — from a browser,
+     * from another app — could therefore be adopted as this download's
+     * outputPath, and Delete file would then delete it. Bounding the search to
+     * files touched during the pass makes that impossible; when nothing
+     * qualifies the caller reports that the output could not be located, which
+     * is the honest answer.
+     */
+    private fun findFileWrittenDuringPass(dir: File, passStartedAtMs: Long): String? {
         return try {
-            val cutoff = System.currentTimeMillis() - 180_000
-            val files = dir.listFiles()?.filter { it.isFile && !it.name.endsWith(".part") && !it.name.endsWith(".ytdl") }
-            val recent = files?.filter { it.lastModified() > cutoff }?.maxByOrNull { it.lastModified() }
-            if (recent != null) return recent.absolutePath
-            files?.maxByOrNull { it.lastModified() }?.absolutePath
+            // Filesystem timestamp granularity can be as coarse as two seconds,
+            // so allow a little slack rather than miss a genuine output.
+            val cutoff = passStartedAtMs - 2_000
+            dir.listFiles()
+                ?.filter {
+                    it.isFile &&
+                        !it.name.endsWith(".part") &&
+                        !it.name.endsWith(".ytdl") &&
+                        it.lastModified() >= cutoff
+                }
+                ?.maxByOrNull { it.lastModified() }
+                ?.absolutePath
         } catch (_: Exception) {
             null
         }

@@ -22,6 +22,8 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Check
@@ -33,11 +35,17 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -72,12 +80,85 @@ import courier.ui.theme.TextPrimary
 import courier.ui.theme.TextSecondary
 import courier.ui.theme.WarningOrange
 
+/**
+ * Confirms deleting the media itself.
+ *
+ * Names the files rather than asking abstractly: "Delete this download?" does
+ * not tell you whether the file on disk is going with it, which is the whole
+ * question.
+ */
+@Composable
+private fun DeleteFileConfirmation(
+    filePaths: List<String>,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val names = remember(filePaths) {
+        filePaths.map { it.replace('\\', '/').substringAfterLast('/') }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = SurfaceCard,
+        title = {
+            Text(
+                if (names.size == 1) "Delete this file?" else "Delete these ${names.size} files?",
+                color = TextPrimary,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column {
+                Text(
+                    "This permanently removes the downloaded media from disk, not just " +
+                        "from the list.",
+                    color = TextSecondary,
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                for (name in names.take(5)) {
+                    Text(
+                        text = name,
+                        color = TextPrimary,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(bottom = 3.dp)
+                    )
+                }
+                if (names.size > 5) {
+                    Text(
+                        "and ${names.size - 5} more",
+                        color = TextMuted,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(containerColor = AccentPink)
+            ) {
+                Text("Delete file", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = TextSecondary)
+            }
+        }
+    )
+}
+
 @Composable
 fun DownloadItemCard(
     item: DownloadItem,
     onCancel: () -> Unit,
     onRetry: () -> Unit,
-    onRemove: () -> Unit,
+    onRemoveFromList: () -> Unit,
+    onDeleteFile: () -> Unit,
     onPreviewMedia: () -> Unit,
     onCopyLink: () -> Unit,
     onOpenFolder: () -> Unit,
@@ -98,6 +179,25 @@ fun DownloadItemCard(
             kotlinx.coroutines.delay(1500)
             justCopied = false
         }
+    }
+
+    var menuOpen by remember(item.id) { mutableStateOf(false) }
+    var confirmDeleteFile by remember(item.id) { mutableStateOf(false) }
+
+    val filePaths = remember(item.outputPath, item.outputPaths) {
+        (item.outputPaths + listOfNotNull(item.outputPath)).distinct().filter { it.isNotBlank() }
+    }
+    val hasFileOnDisk = filePaths.isNotEmpty()
+
+    if (confirmDeleteFile) {
+        DeleteFileConfirmation(
+            filePaths = filePaths,
+            onConfirm = {
+                confirmDeleteFile = false
+                onDeleteFile()
+            },
+            onDismiss = { confirmDeleteFile = false }
+        )
     }
 
     Box(
@@ -449,16 +549,66 @@ fun DownloadItemCard(
                         )
                     }
                 } else {
-                    IconButton(
-                        onClick = onRemove,
-                        modifier = Modifier.size(36.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Delete from history",
-                            tint = TextMuted,
-                            modifier = Modifier.size(18.dp)
-                        )
+                    // One overflow rather than two buttons: removing the row and
+                    // deleting the media are different actions with very
+                    // different consequences, and a single trash icon that did
+                    // both silently did the destructive one.
+                    Box {
+                        IconButton(
+                            onClick = { menuOpen = true },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "More actions",
+                                tint = TextMuted,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = menuOpen,
+                            onDismissRequest = { menuOpen = false },
+                            modifier = Modifier.background(SurfaceCard)
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text("Remove from list", color = TextPrimary, fontSize = 13.sp)
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = null,
+                                        tint = TextSecondary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                },
+                                onClick = {
+                                    menuOpen = false
+                                    onRemoveFromList()
+                                }
+                            )
+
+                            if (hasFileOnDisk) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text("Delete file…", color = AccentPink, fontSize = 13.sp)
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.DeleteForever,
+                                            contentDescription = null,
+                                            tint = AccentPink,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    },
+                                    onClick = {
+                                        menuOpen = false
+                                        confirmDeleteFile = true
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
             }

@@ -561,7 +561,15 @@ fun HomeScreen(
                                 item = item,
                                 onCancel = { downloadManager.cancelDownload(item.id) },
                                 onRetry = { downloadManager.retryDownload(item.id) },
-                                onRemove = {
+                                onRemoveFromList = {
+                                    coroutineScope.launch {
+                                        dismissingItemIds.add(item.id)
+                                        delay(300)
+                                        downloadManager.removeDownload(item.id, deleteDiskFile = false)
+                                        dismissingItemIds.remove(item.id)
+                                    }
+                                },
+                                onDeleteFile = {
                                     coroutineScope.launch {
                                         dismissingItemIds.add(item.id)
                                         delay(300)

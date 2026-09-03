@@ -132,13 +132,26 @@ fun QualityPickerDialog(
         }
     }
 
-    val audioFormats = remember(videoInfo) {
-        val extracted = videoInfo.formats.filter { it.isAudioOnly }
-        val standardAudio = listOf(
-            VideoFormat("bestaudio", "Best Audio Quality (M4A / Original)", ext = "m4a", isAudioOnly = true),
-            VideoFormat("mp3", "MP3 Audio (Converted 320kbps)", ext = "mp3", isAudioOnly = true)
+    // Two modes, because two modes is what the engine actually supports:
+    // keep the source stream, or re-encode to MP3. The previous version
+    // computed the extracted audio formats and then discarded them with
+    // `if (extracted.isEmpty()) standardAudio else standardAudio` — both
+    // branches identical — which made the work look meaningful.
+    val audioFormats = remember {
+        listOf(
+            VideoFormat(
+                "bestaudio",
+                "Original Audio (no re-encode)",
+                ext = "m4a",
+                isAudioOnly = true
+            ),
+            VideoFormat(
+                "mp3",
+                "MP3 (re-encoded, plays anywhere)",
+                ext = "mp3",
+                isAudioOnly = true
+            )
         )
-        if (extracted.isEmpty()) standardAudio else standardAudio
     }
 
     var selectedFormat by remember(isAudioOnly, videoInfo, defaultQuality) {

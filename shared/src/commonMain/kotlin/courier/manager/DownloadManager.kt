@@ -234,7 +234,16 @@ class DownloadManager(
         triggerQueueProcessing()
     }
 
-    fun removeDownload(id: String, deleteDiskFile: Boolean = true) {
+    /**
+     * Removes [id] from the history.
+     *
+     * [deleteDiskFile] defaults to false. It used to default to true, and the
+     * Downloads list passed true unconditionally, so the trash icon on a
+     * finished download deleted the media itself with no confirmation and no
+     * undo. Deleting a user's file is now something a caller has to ask for
+     * explicitly.
+     */
+    fun removeDownload(id: String, deleteDiskFile: Boolean = false) {
         scope.launch {
             val jobToCancel = stateMutex.withLock {
                 val job = activeJobs.remove(id)

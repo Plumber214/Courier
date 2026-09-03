@@ -192,9 +192,10 @@ class DownloadEngineAndroid : DownloadEngine {
 
             if (item.isAudioOnly || item.mediaType == MediaType.AUDIO) {
                 requests.add(newRequest().apply {
-                    addOption("-f", "bestaudio/best")
-                    addOption("-x")
-                    addOption("--audio-format", "mp3")
+                    val audioArgs = FormatSelector.audioArgs(formatId)
+                    addOption(audioArgs[0], audioArgs[1])   // -f <selector>
+                    addOption(audioArgs[2])                 // -x
+                    addOption(audioArgs[3], audioArgs[4])   // --audio-format <target>
                 })
             } else if (item.mediaType == MediaType.IMAGE) {
                 requests.add(newRequest().apply { addPhotoArgs() })

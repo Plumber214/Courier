@@ -45,17 +45,61 @@ private fun putCachedMemoryImage(url: String, bitmap: ImageBitmap) {
     }
 }
 
-private fun getDiskCacheFile(url: String): File? {
+/** Total bytes the thumbnail cache may occupy on disk before eviction. */
+private const val DISK_CACHE_BUDGET_BYTES = 48L * 1024 * 1024
+
+/** Trimming lists the directory, so it runs periodically rather than per write. */
+private const val WRITES_BETWEEN_TRIMS = 25
+
+private val writesSinceTrim = java.util.concurrent.atomic.AtomicInteger(0)
+
+private fun thumbCacheDir(): File? {
     return try {
-        val appStorage = getPlatformActions().getAppStorageDirectory()
-        val cacheDir = File(appStorage, "thumb_cache")
-        if (!cacheDir.exists()) {
-            cacheDir.mkdirs()
-        }
-        val safeName = "thumb_" + url.hashCode().toString().replace("-", "n") + ".cache"
-        File(cacheDir, safeName)
+        val cacheDir = File(getPlatformActions().getAppStorageDirectory(), "thumb_cache")
+        if (!cacheDir.exists()) cacheDir.mkdirs()
+        cacheDir
     } catch (_: Exception) {
         null
+    }
+}
+
+private fun getDiskCacheFile(url: String): File? {
+    val cacheDir = thumbCacheDir() ?: return null
+    return try {
+        // SHA-256 rather than String.hashCode(). A 32-bit hash collides often
+        // enough to matter across a long download history, and a collision here
+        // means showing one video's thumbnail on another.
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(url.toByteArray(Charsets.UTF_8))
+        val name = digest.take(16).joinToString("") { "%02x".format(it) }
+        File(cacheDir, "thumb_$name.cache")
+    } catch (_: Exception) {
+        null
+    }
+}
+
+/**
+ * Evicts least-recently-modified entries until the cache fits its budget.
+ *
+ * Nothing evicted this directory before, so it grew for the life of the
+ * install — one entry per thumbnail ever fetched.
+ */
+private fun trimDiskCacheIfNeeded() {
+    if (writesSinceTrim.incrementAndGet() < WRITES_BETWEEN_TRIMS) return
+    writesSinceTrim.set(0)
+
+    try {
+        val cacheDir = thumbCacheDir() ?: return
+        val files = cacheDir.listFiles()?.filter { it.isFile } ?: return
+        var total = files.sumOf { it.length() }
+        if (total <= DISK_CACHE_BUDGET_BYTES) return
+
+        for (file in files.sortedBy { it.lastModified() }) {
+            if (total <= DISK_CACHE_BUDGET_BYTES) break
+            val size = file.length()
+            if (file.delete()) total -= size
+        }
+    } catch (_: Exception) {
     }
 }
 
@@ -114,7 +158,10 @@ private suspend fun loadThumbnail(url: String): ImageBitmap? = withContext(Dispa
             val bitmap = decodeImageByteArray(bytes)
             if (bitmap != null) {
                 putCachedMemoryImage(url, bitmap)
-                diskFile?.writeBytes(bytes)
+                if (diskFile != null) {
+                    diskFile.writeBytes(bytes)
+                    trimDiskCacheIfNeeded()
+                }
                 fetchedBitmap = bitmap
             }
         }

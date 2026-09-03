@@ -6,11 +6,11 @@ object AppVersion {
     // Keep VERSION_NAME and BUILD_NUMBER in sync with gradle.properties.
     // The root `checkVersionConsistency` task fails the build if they drift.
     const val MAJOR = 1
-    const val MINOR = 6
+    const val MINOR = 7
     const val PATCH = 0
-    const val BUILD_NUMBER = 23
-    const val VERSION_NAME = "1.6.0"
-    const val RELEASE_DATE = "2026.09.02"
+    const val BUILD_NUMBER = 24
+    const val VERSION_NAME = "1.7.0"
+    const val RELEASE_DATE = "2026.09.03"
     const val GIT_BRANCH = "main"
 
     val DISPLAY_STRING: String

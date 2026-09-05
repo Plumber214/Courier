@@ -141,10 +141,7 @@ fun HomeScreen(
     val completedCount = downloads.count { it.status == DownloadStatus.COMPLETED }
 
     Surface(
-        modifier = modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding(),
+        modifier = modifier.fillMaxSize(),
         color = Color.Transparent
     ) {
         // Centred and capped rather than stretched: a full-width line of body
@@ -159,7 +156,7 @@ fun HomeScreen(
                 .widthIn(max = CONTENT_MAX_WIDTH_DP.dp)
                 .fillMaxSize()
                 .padding(horizontal = gutter)
-                .padding(top = 18.dp, bottom = 14.dp)
+                .padding(top = 8.dp, bottom = 14.dp)
         ) {
             // App Bar
             Row(
@@ -173,8 +170,8 @@ fun HomeScreen(
                     Box(
                         modifier = Modifier
                             .size(42.dp)
-                            .background(PrimaryIndigo, RoundedCornerShape(12.dp))
-                            .border(1.dp, AccentCyan.copy(alpha = 0.5f), RoundedCornerShape(12.dp)),
+                            .background(PrimaryIndigo, RoundedCornerShape(14.dp))
+                            .border(1.dp, AccentCyan.copy(alpha = 0.5f), RoundedCornerShape(14.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -204,45 +201,25 @@ fun HomeScreen(
                     }
                 }
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    val statusParts = buildList {
-                        if (activeCount > 0) add("$activeCount Active")
-                        if (queuedCount > 0) add("$queuedCount Queued")
-                        if (pausedCount > 0) add("$pausedCount Paused")
-                    }
-                    val statusText = statusParts.joinToString(" • ")
+                val statusParts = buildList {
+                    if (activeCount > 0) add("$activeCount Active")
+                    if (queuedCount > 0) add("$queuedCount Queued")
+                    if (pausedCount > 0) add("$pausedCount Paused")
+                }
+                val statusText = statusParts.joinToString(" • ")
 
-                    if (statusText.isNotBlank()) {
-                        Box(
-                            modifier = Modifier
-                                .background(PrimaryIndigo.copy(alpha = 0.28f), RoundedCornerShape(10.dp))
-                                .border(1.dp, AccentCyan, RoundedCornerShape(10.dp))
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = statusText,
-                                color = AccentCyan,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-
-                    IconButton(
-                        onClick = onOpenSettings,
+                if (statusText.isNotBlank()) {
+                    Box(
                         modifier = Modifier
-                            .size(44.dp)
-                            .background(SurfaceCard, CircleShape)
-                            .border(1.dp, CardBorderDark, CircleShape)
+                            .background(PrimaryIndigo.copy(alpha = 0.28f), CircleShape)
+                            .border(1.dp, AccentCyan, CircleShape)
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings",
-                            tint = TextPrimary,
-                            modifier = Modifier.size(22.dp)
+                        Text(
+                            text = statusText,
+                            color = AccentCyan,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -474,10 +451,10 @@ fun HomeScreen(
                             color = AccentPink,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier
-                                .background(AccentPink.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
-                                .border(1.dp, AccentPink.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                .background(AccentPink.copy(alpha = 0.12f), CircleShape)
+                                .border(1.dp, AccentPink.copy(alpha = 0.4f), CircleShape)
                                 .clickable { downloadManager.cancelAll() }
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
                         )
                     }
 
@@ -488,10 +465,10 @@ fun HomeScreen(
                             color = AccentCyan,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier
-                                .background(SurfaceVariantDark, RoundedCornerShape(8.dp))
-                                .border(1.dp, CardBorderDark, RoundedCornerShape(8.dp))
+                                .background(SurfaceVariantDark, CircleShape)
+                                .border(1.dp, CardBorderDark, CircleShape)
                                 .clickable { downloadManager.clearCompleted() }
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
                         )
                     }
                 }

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -131,7 +132,7 @@ fun UrlInputBar(
                     }
                 },
                 singleLine = true,
-                shape = RoundedCornerShape(14.dp),
+                shape = CircleShape,
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = SurfaceCard,
                     unfocusedContainerColor = SurfaceCard,
@@ -167,9 +168,9 @@ fun UrlInputBar(
                     .border(
                         1.dp,
                         if (url.isNotBlank() && !isAnalyzing) AccentCyan.copy(alpha = 0.6f) else Color.Transparent,
-                        RoundedCornerShape(14.dp)
+                        CircleShape
                     ),
-                shape = RoundedCornerShape(14.dp),
+                shape = CircleShape,
                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = PrimaryIndigo,
@@ -240,16 +241,16 @@ fun PlatformBadge(
 
     Box(
         modifier = Modifier
-            .background(bg, RoundedCornerShape(8.dp))
-            .border(1.dp, borderColor, RoundedCornerShape(8.dp))
-            .padding(horizontal = 9.dp, vertical = 5.dp)
+            .background(bg, CircleShape)
+            .border(1.dp, borderColor, CircleShape)
+            .padding(horizontal = 11.dp, vertical = 6.dp)
             .semantics { contentDescription = platform.displayName }
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
                 modifier = Modifier
                     .size(7.dp)
-                    .background(brandColor, RoundedCornerShape(3.dp))
+                    .background(brandColor, CircleShape)
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(

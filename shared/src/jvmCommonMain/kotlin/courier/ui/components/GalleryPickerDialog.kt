@@ -1,4 +1,4 @@
-﻿package courier.ui.components
+package courier.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -250,7 +250,7 @@ fun GalleryPickerDialog(
                         modifier = Modifier
                             .weight(1f)
                             .height(48.dp),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = CircleShape,
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary)
                     ) {
                         Text("Cancel", fontSize = 14.sp)
@@ -265,7 +265,7 @@ fun GalleryPickerDialog(
                         modifier = Modifier
                             .weight(1.5f)
                             .height(48.dp),
-                        shape = RoundedCornerShape(14.dp),
+                        shape = CircleShape,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = PrimaryIndigo,
                             contentColor = Color.White,
@@ -346,8 +346,8 @@ private fun GalleryItemCard(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(6.dp)
-                .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(6.dp))
-                .padding(horizontal = 5.dp, vertical = 2.dp)
+                .background(Color.Black.copy(alpha = 0.7f), CircleShape)
+                .padding(horizontal = 7.dp, vertical = 2.dp)
         ) {
             Text(
                 text = "#${entry.index}",
@@ -383,9 +383,9 @@ private fun GalleryItemCard(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(6.dp)
-                    .background(Color.Black.copy(alpha = 0.75f), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 4.dp, vertical = 2.dp)
-            ) {
+                    .background(Color.Black.copy(alpha = 0.75f), CircleShape)
+                .padding(horizontal = 6.dp, vertical = 2.dp)
+        ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         imageVector = Icons.Default.Movie,

@@ -233,8 +233,8 @@ fun DownloadItemCard(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(SurfaceCard, RoundedCornerShape(18.dp))
-            .border(1.dp, CardBorderDark, RoundedCornerShape(18.dp))
+            .background(SurfaceCard, RoundedCornerShape(24.dp))
+            .border(1.dp, CardBorderDark, RoundedCornerShape(24.dp))
             .padding(if (isCompact) 14.dp else 16.dp)
     ) {
         if (isCompact) {
@@ -419,9 +419,9 @@ private fun ItemThumbnail(
     Box(
         modifier = Modifier
             .size(width = width, height = height)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(SurfaceVariantDark)
-            .border(1.dp, CardBorderDark, RoundedCornerShape(12.dp))
+            .border(1.dp, CardBorderDark, RoundedCornerShape(16.dp))
             .clickable(
                 enabled = canPreview,
                 role = Role.Button,
@@ -468,8 +468,8 @@ private fun ItemThumbnail(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(4.dp)
-                .background(Color(0xDD090A10), RoundedCornerShape(6.dp))
-                .padding(horizontal = 6.dp, vertical = 2.dp)
+                .background(Color(0xDD090A10), CircleShape)
+                .padding(horizontal = 8.dp, vertical = 2.dp)
         ) {
             Text(
                 item.platform.displayName,
@@ -505,9 +505,9 @@ private fun ItemTitleAndBadges(
         if (item.formatLabel != null) {
             Box(
                 modifier = Modifier
-                    .background(PrimaryIndigo.copy(alpha = 0.25f), RoundedCornerShape(6.dp))
-                    .border(1.dp, PrimaryIndigo.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 7.dp, vertical = 3.dp)
+                    .background(PrimaryIndigo.copy(alpha = 0.25f), CircleShape)
+                    .border(1.dp, PrimaryIndigo.copy(alpha = 0.4f), CircleShape)
+                    .padding(horizontal = 9.dp, vertical = 3.dp)
             ) {
                 Text(
                     item.formatLabel,
@@ -544,7 +544,7 @@ private fun ItemStatusBlock(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp)),
+                        .clip(CircleShape),
                     color = AccentCyan,
                     trackColor = SurfaceVariantDark,
                     strokeCap = StrokeCap.Round
@@ -650,7 +650,7 @@ private fun ItemStatusBlock(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp)),
+                        .clip(CircleShape),
                     color = WarningOrange,
                     trackColor = SurfaceVariantDark,
                     strokeCap = StrokeCap.Round

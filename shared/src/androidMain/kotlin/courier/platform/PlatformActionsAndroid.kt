@@ -192,9 +192,6 @@ class PlatformActionsAndroid : PlatformActions {
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
             "Courier"
         )
-        if (!courierDir.exists()) {
-            courierDir.mkdirs()
-        }
         return courierDir.absolutePath
     }
 

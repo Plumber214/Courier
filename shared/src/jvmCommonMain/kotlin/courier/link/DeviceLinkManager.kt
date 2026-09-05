@@ -257,17 +257,20 @@ class DeviceLinkManager(
         networkMonitor.stop()
         reconnectJob?.cancel()
         reconnectJob = null
-        linkServer.stop()
-        discovery.stop()
-        // Write through before tearing the links down, or the in-memory
-        // last-seen for a device that was connected right up to this point is
-        // lost and the card falls back to a stale timestamp.
-        activeLinks.keys.forEach { flushLastSeen(it) }
-        activeLinks.values.forEach { it.close() }
+
+        val linksToClose = activeLinks.values.toList()
+        val devIdsToFlush = activeLinks.keys.toList()
         activeLinks.clear()
         reconnectBackoffMs.clear()
         nextAttemptAtMs.clear()
         _connectionStates.value = emptyMap()
+
+        scope.launch {
+            linkServer.stop()
+            discovery.stop()
+            devIdsToFlush.forEach { flushLastSeen(it) }
+            linksToClose.forEach { it.close() }
+        }
     }
 
     /**

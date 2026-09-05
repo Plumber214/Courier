@@ -251,8 +251,8 @@ fun QualityPickerDialog(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(SurfaceCard, RoundedCornerShape(14.dp))
-                        .border(1.dp, CardBorderDark, RoundedCornerShape(14.dp))
+                        .background(SurfaceCard, RoundedCornerShape(20.dp))
+                        .border(1.dp, CardBorderDark, RoundedCornerShape(20.dp))
                         .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -262,9 +262,9 @@ fun QualityPickerDialog(
                     Box(
                         modifier = Modifier
                             .size(72.dp, 52.dp)
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .background(SurfaceVariantDark)
-                            .border(1.dp, CardBorderDark, RoundedCornerShape(10.dp)),
+                            .border(1.dp, CardBorderDark, RoundedCornerShape(14.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         NetworkImage(
@@ -298,8 +298,8 @@ fun QualityPickerDialog(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 modifier = Modifier
-                                    .background(platformColor.copy(alpha = 0.25f), RoundedCornerShape(6.dp))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    .background(platformColor.copy(alpha = 0.25f), CircleShape)
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
                             ) {
                                 Text(
                                     text = videoInfo.platform.displayName,
@@ -564,12 +564,12 @@ fun QualityPickerDialog(
                     // Browse Button
                     Box(
                         modifier = Modifier
-                            .background(SurfaceVariantDark, RoundedCornerShape(6.dp))
-                            .border(1.dp, CardBorderDark, RoundedCornerShape(6.dp))
+                            .background(SurfaceVariantDark, CircleShape)
+                            .border(1.dp, CardBorderDark, CircleShape)
                             // One picker on both platforms now — the desktop
                             // branch used to open a Swing file chooser.
                             .clickable { showLocationPicker = true }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .padding(horizontal = 12.dp, vertical = 5.dp)
                     ) {
                         Text(
                             text = "Change",
@@ -587,12 +587,12 @@ fun QualityPickerDialog(
                             .fillMaxWidth()
                             .background(
                                 if (downloadPlaylist) WarningOrange.copy(alpha = 0.16f) else SurfaceCard,
-                                RoundedCornerShape(10.dp)
+                                RoundedCornerShape(16.dp)
                             )
                             .border(
                                 1.dp,
                                 if (downloadPlaylist) WarningOrange.copy(alpha = 0.7f) else CardBorderDark,
-                                RoundedCornerShape(10.dp)
+                                RoundedCornerShape(16.dp)
                             )
                             .toggleable(
                                 value = downloadPlaylist,
@@ -648,7 +648,7 @@ fun QualityPickerDialog(
                     pairedDevices.forEach { dev ->
                         Button(
                             onClick = { onSendToDevice(dev.deviceId, selectedFormat, isAudioOnly) },
-                            shape = RoundedCornerShape(10.dp),
+                            shape = CircleShape,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = SurfaceCard,
                                 contentColor = TextPrimary
@@ -656,7 +656,7 @@ fun QualityPickerDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(40.dp)
-                                .border(1.dp, PrimaryIndigo.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                                .border(1.dp, PrimaryIndigo.copy(alpha = 0.6f), CircleShape)
                         ) {
                             Icon(
                                 imageVector = if (dev.deviceType == "phone") Icons.Default.PhoneAndroid else Icons.Default.Computer,
@@ -688,7 +688,7 @@ fun QualityPickerDialog(
                 ) {
                     Button(
                         onClick = onDismiss,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = CircleShape,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = SurfaceVariantDark,
                             contentColor = TextSecondary
@@ -696,7 +696,7 @@ fun QualityPickerDialog(
                         modifier = Modifier
                             .weight(1f)
                             .height(46.dp)
-                            .border(1.dp, CardBorderDark, RoundedCornerShape(12.dp))
+                            .border(1.dp, CardBorderDark, CircleShape)
                     ) {
                         Text("Cancel", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
@@ -710,7 +710,7 @@ fun QualityPickerDialog(
                                 downloadPlaylist
                             )
                         },
-                        shape = RoundedCornerShape(12.dp),
+                        shape = CircleShape,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = PrimaryIndigo,
                             contentColor = Color.White
@@ -718,7 +718,7 @@ fun QualityPickerDialog(
                         modifier = Modifier
                             .weight(1.5f)
                             .height(46.dp)
-                            .border(1.dp, AccentCyan.copy(alpha = 0.6f), RoundedCornerShape(12.dp)),
+                            .border(1.dp, AccentCyan.copy(alpha = 0.6f), CircleShape),
                         elevation = ButtonDefaults.buttonElevation(defaultElevation = 3.dp)
                     ) {
                         Icon(

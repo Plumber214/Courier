@@ -39,6 +39,7 @@ class Discovery(
     private var udpSocket: DatagramSocket? = null
     private var listenerJob: Job? = null
     private var broadcastJob: Job? = null
+    private var mdnsJob: Job? = null
     private var jmdns: JmDNS? = null
 
     // Held for the announcing window rather than opened and closed per
@@ -112,11 +113,16 @@ class Discovery(
     fun stopUdpListener() {
         listenerJob?.cancel()
         listenerJob = null
-        try {
-            udpSocket?.close()
-        } catch (_: Exception) {}
+        val socketToClose = udpSocket
         udpSocket = null
         udpRateLimits.clear()
+        if (socketToClose != null) {
+            scope.launch {
+                try {
+                    socketToClose.close()
+                } catch (_: Exception) {}
+            }
+        }
     }
 
     /**
@@ -149,13 +155,18 @@ class Discovery(
     }
 
     fun stopActiveAnnouncing() {
+        _isScanning.value = false
         broadcastJob?.cancel()
         broadcastJob = null
-        try {
-            broadcastSocket?.close()
-        } catch (_: Exception) {}
+        val socketToClose = broadcastSocket
         broadcastSocket = null
-        _isScanning.value = false
+        if (socketToClose != null) {
+            scope.launch {
+                try {
+                    socketToClose.close()
+                } catch (_: Exception) {}
+            }
+        }
         stopMdns()
     }
 
@@ -253,14 +264,21 @@ class Discovery(
     }
 
     private fun startMdns() {
-        if (jmdns != null) return
-        scope.launch {
+        if (jmdns != null || mdnsJob?.isActive == true) return
+        mdnsJob?.cancel()
+        mdnsJob = scope.launch {
             try {
                 val localAddr = getLocalIpAddress()
-                if (localAddr != null) {
+                if (localAddr != null && isActive) {
                     val publicIdentity = getPublicIdentity()
                     val genericServiceName = "Courier-${publicIdentity.deviceId.take(6)}"
                     val jmdnsInstance = JmDNS.create(localAddr, genericServiceName)
+                    if (!isActive) {
+                        try {
+                            jmdnsInstance.close()
+                        } catch (_: Exception) {}
+                        return@launch
+                    }
                     jmdns = jmdnsInstance
 
                     val props = mapOf("id" to publicIdentity.deviceId, "type" to publicIdentity.deviceType)
@@ -298,11 +316,18 @@ class Discovery(
     }
 
     private fun stopMdns() {
-        try {
-            jmdns?.unregisterAllServices()
-            jmdns?.close()
-        } catch (_: Exception) {}
+        mdnsJob?.cancel()
+        mdnsJob = null
+        val toClose = jmdns
         jmdns = null
+        if (toClose != null) {
+            scope.launch {
+                try {
+                    toClose.unregisterAllServices()
+                    toClose.close()
+                } catch (_: Exception) {}
+            }
+        }
     }
 
     fun registerDiscoveredDevice(

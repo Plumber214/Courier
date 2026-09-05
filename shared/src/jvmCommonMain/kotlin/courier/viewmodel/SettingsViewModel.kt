@@ -39,9 +39,9 @@ class SettingsViewModel(
     // Device Link, surfaced here so its identity and switch sit with the rest
     // of the app's configuration rather than only on a tab you have to know to
     // open.
-    private val linkManager get() = courier.di.AppModule.deviceLinkManager
-    val myDeviceIdentity: StateFlow<courier.link.DeviceIdentity> get() = linkManager.myIdentity
-    val pairedDevices: StateFlow<List<courier.link.PairedDevice>> get() = linkManager.trustStore.pairedDevices
+    private val linkManager = courier.di.AppModule.deviceLinkManager
+    val myDeviceIdentity: StateFlow<courier.link.DeviceIdentity> = linkManager.myIdentity
+    val pairedDevices: StateFlow<List<courier.link.PairedDevice>> = linkManager.trustStore.pairedDevices
 
     private val _showRenameDialog = MutableStateFlow(false)
     val showRenameDialog: StateFlow<Boolean> = _showRenameDialog.asStateFlow()

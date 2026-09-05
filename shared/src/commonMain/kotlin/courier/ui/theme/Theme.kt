@@ -1,5 +1,6 @@
 package courier.ui.theme
 
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
@@ -70,11 +71,17 @@ private val DarkColorScheme = darkColorScheme(
     onError = Color.White
 )
 
+// Global Shape Tokens
+val PillShape = CircleShape
+val CardPillShape = RoundedCornerShape(24.dp)
+val DialogPillShape = RoundedCornerShape(28.dp)
+
 val CourierShapes = Shapes(
-    small = RoundedCornerShape(10.dp),
-    medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(22.dp),
-    extraLarge = RoundedCornerShape(30.dp)
+    extraSmall = CircleShape,
+    small = CircleShape,
+    medium = RoundedCornerShape(20.dp),
+    large = RoundedCornerShape(24.dp),
+    extraLarge = RoundedCornerShape(28.dp)
 )
 
 @Composable

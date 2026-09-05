@@ -71,6 +71,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -227,9 +228,7 @@ fun SettingsScreen(
 
     Surface(
         modifier = modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding(),
+            .fillMaxSize(),
         color = Color.Transparent
     ) {
         Box(
@@ -241,7 +240,7 @@ fun SettingsScreen(
                 .widthIn(max = CONTENT_MAX_WIDTH_DP.dp)
                 .fillMaxWidth()
                 .padding(horizontal = gutter)
-                .padding(top = 18.dp, bottom = 20.dp)
+                .padding(top = 8.dp, bottom = 20.dp)
         ) {
             // Header
             Row(
@@ -331,7 +330,7 @@ fun SettingsScreen(
 
                         Button(
                             onClick = { viewModel.browseAndAddLocation() },
-                            shape = RoundedCornerShape(10.dp),
+                            shape = CircleShape,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = PrimaryIndigo,
                                 contentColor = Color.White
@@ -372,12 +371,12 @@ fun SettingsScreen(
                                     .fillMaxWidth()
                                     .background(
                                         if (isSelected) PrimaryIndigo.copy(alpha = 0.2f) else SurfaceVariantDark.copy(alpha = 0.6f),
-                                        RoundedCornerShape(10.dp)
+                                        RoundedCornerShape(16.dp)
                                     )
                                     .border(
                                         1.dp,
                                         if (isSelected) AccentCyan.copy(alpha = 0.6f) else CardBorderDark,
-                                        RoundedCornerShape(10.dp)
+                                        RoundedCornerShape(16.dp)
                                     )
                                     .selectable(
                                         selected = isSelected,
@@ -470,9 +469,9 @@ fun SettingsScreen(
 
                         Box(
                             modifier = Modifier
-                                .background(PrimaryIndigo.copy(alpha = 0.28f), RoundedCornerShape(8.dp))
-                                .border(1.dp, AccentCyan, RoundedCornerShape(8.dp))
-                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                                .background(PrimaryIndigo.copy(alpha = 0.28f), CircleShape)
+                                .border(1.dp, AccentCyan, CircleShape)
+                                .padding(horizontal = 12.dp, vertical = 4.dp)
                         ) {
                             Text(
                                 "${settings.maxConcurrentDownloads}",
@@ -517,8 +516,8 @@ fun SettingsScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(if (isSelected) PrimaryIndigo.copy(alpha = 0.2f) else Color.Transparent, RoundedCornerShape(10.dp))
-                                .border(1.dp, if (isSelected) AccentCyan.copy(alpha = 0.5f) else Color.Transparent, RoundedCornerShape(10.dp))
+                                .background(if (isSelected) PrimaryIndigo.copy(alpha = 0.2f) else Color.Transparent, RoundedCornerShape(16.dp))
+                                .border(1.dp, if (isSelected) AccentCyan.copy(alpha = 0.5f) else Color.Transparent, RoundedCornerShape(16.dp))
                                 .selectable(
                                     selected = isSelected,
                                     role = Role.RadioButton,
@@ -587,8 +586,8 @@ fun SettingsScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(if (isSelected) PrimaryIndigo.copy(alpha = 0.2f) else Color.Transparent, RoundedCornerShape(10.dp))
-                                .border(1.dp, if (isSelected) AccentCyan.copy(alpha = 0.5f) else Color.Transparent, RoundedCornerShape(10.dp))
+                                .background(if (isSelected) PrimaryIndigo.copy(alpha = 0.2f) else Color.Transparent, RoundedCornerShape(16.dp))
+                                .border(1.dp, if (isSelected) AccentCyan.copy(alpha = 0.5f) else Color.Transparent, RoundedCornerShape(16.dp))
                                 .selectable(
                                     selected = isSelected,
                                     role = Role.RadioButton,
@@ -639,7 +638,7 @@ fun SettingsScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .background(if (isCodecSelected) PrimaryIndigo.copy(alpha = 0.15f) else Color.Transparent, RoundedCornerShape(8.dp))
+                                    .background(if (isCodecSelected) PrimaryIndigo.copy(alpha = 0.15f) else Color.Transparent, RoundedCornerShape(14.dp))
                                     .selectable(
                                         selected = isCodecSelected,
                                         role = Role.RadioButton,
@@ -753,15 +752,15 @@ fun SettingsScreen(
                                         modifier = Modifier
                                             .background(
                                                 if (isOn) PrimaryIndigo.copy(alpha = 0.3f) else SurfaceVariantDark,
-                                                RoundedCornerShape(10.dp)
+                                                CircleShape
                                             )
                                             .border(
                                                 1.dp,
                                                 if (isOn) AccentCyan else CardBorderDark,
-                                                RoundedCornerShape(10.dp)
+                                                CircleShape
                                             )
                                             .clickable { viewModel.toggleSubtitleLanguage(code) }
-                                            .padding(horizontal = 12.dp, vertical = 7.dp)
+                                            .padding(horizontal = 14.dp, vertical = 7.dp)
                                     ) {
                                         Text(
                                             text = label,
@@ -846,8 +845,8 @@ fun SettingsScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(SurfaceVariantDark.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                            .border(1.dp, CardBorderDark, RoundedCornerShape(12.dp))
+                            .background(SurfaceVariantDark.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+                            .border(1.dp, CardBorderDark, RoundedCornerShape(16.dp))
                             .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -882,8 +881,8 @@ fun SettingsScreen(
                             onClick = { viewModel.openRenameDialog() },
                             modifier = Modifier
                                 .size(34.dp)
-                                .background(SurfaceCard, RoundedCornerShape(8.dp))
-                                .border(1.dp, CardBorderDark, RoundedCornerShape(8.dp))
+                                .background(SurfaceCard, CircleShape)
+                                .border(1.dp, CardBorderDark, CircleShape)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Edit,
@@ -980,10 +979,10 @@ fun SettingsScreen(
 
                             Box(
                                 modifier = Modifier
-                                    .background(bg, RoundedCornerShape(10.dp))
-                                    .border(1.dp, border, RoundedCornerShape(10.dp))
+                                    .background(bg, CircleShape)
+                                    .border(1.dp, border, CircleShape)
                                     .clickable { viewModel.updateCookieBrowser(browser) }
-                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                                    .padding(horizontal = 14.dp, vertical = 8.dp)
                             ) {
                                 Text(
                                     text = browser,
@@ -1089,7 +1088,7 @@ fun SettingsScreen(
                         Button(
                             onClick = { viewModel.checkAppUpdates() },
                             enabled = !isChecking && !isDownloading,
-                            shape = RoundedCornerShape(12.dp),
+                            shape = CircleShape,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = PrimaryIndigo,
                                 contentColor = Color.White
@@ -1147,7 +1146,8 @@ fun SettingsScreen(
                                 progress = { st.progressPercent / 100f },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(4.dp),
+                                    .height(4.dp)
+                                    .clip(CircleShape),
                                 color = AccentCyan,
                                 trackColor = Color.White.copy(alpha = 0.1f)
                             )
@@ -1157,9 +1157,9 @@ fun SettingsScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .background(PrimaryIndigo.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
-                                    .border(1.dp, AccentCyan, RoundedCornerShape(10.dp))
-                                    .padding(12.dp)
+                                    .background(PrimaryIndigo.copy(alpha = 0.25f), RoundedCornerShape(20.dp))
+                                    .border(1.dp, AccentCyan, RoundedCornerShape(20.dp))
+                                    .padding(14.dp)
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -1183,7 +1183,7 @@ fun SettingsScreen(
 
                                     Button(
                                         onClick = { viewModel.restartAndApplyAppUpdate() },
-                                        shape = RoundedCornerShape(8.dp),
+                                        shape = CircleShape,
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = AccentCyan,
                                             contentColor = SurfaceDark
@@ -1199,9 +1199,9 @@ fun SettingsScreen(
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .background(WarningOrange.copy(alpha = 0.14f), RoundedCornerShape(10.dp))
-                                    .border(1.dp, WarningOrange.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
-                                    .padding(12.dp)
+                                    .background(WarningOrange.copy(alpha = 0.14f), RoundedCornerShape(20.dp))
+                                    .border(1.dp, WarningOrange.copy(alpha = 0.6f), RoundedCornerShape(20.dp))
+                                    .padding(14.dp)
                             ) {
                                 Text(
                                     text = "Version ${st.latestVersion} is available",
@@ -1219,10 +1219,10 @@ fun SettingsScreen(
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Box(
                                     modifier = Modifier
-                                        .background(SurfaceVariantDark, RoundedCornerShape(8.dp))
-                                        .border(1.dp, CardBorderDark, RoundedCornerShape(8.dp))
+                                        .background(SurfaceVariantDark, CircleShape)
+                                        .border(1.dp, CardBorderDark, CircleShape)
                                         .clickable { getPlatformActions().setClipboardText(st.releaseUrl) }
-                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                        .padding(horizontal = 12.dp, vertical = 6.dp)
                                 ) {
                                     Text(
                                         "Copy release link",
@@ -1287,7 +1287,7 @@ fun SettingsScreen(
                         Button(
                             onClick = { viewModel.checkAndUpdateBinaries() },
                             enabled = !uiState.isUpdatingBinaries,
-                            shape = RoundedCornerShape(12.dp),
+                            shape = CircleShape,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = PrimaryIndigo,
                                 contentColor = Color.White
@@ -1330,8 +1330,8 @@ fun SettingsScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(SurfaceCard, RoundedCornerShape(14.dp))
-                    .border(1.dp, CardBorderDark, RoundedCornerShape(14.dp))
+                    .background(SurfaceCard, RoundedCornerShape(20.dp))
+                    .border(1.dp, CardBorderDark, RoundedCornerShape(20.dp))
                     .padding(16.dp),
                 verticalAlignment = Alignment.Top
             ) {
@@ -1356,8 +1356,8 @@ fun SettingsScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(SurfaceCard, RoundedCornerShape(12.dp))
-                    .border(1.dp, CardBorderDark, RoundedCornerShape(12.dp))
+                    .background(SurfaceCard, RoundedCornerShape(20.dp))
+                    .border(1.dp, CardBorderDark, RoundedCornerShape(20.dp))
                     .clickable { getPlatformActions().setClipboardText(AppVersion.BUILD_IDENTITY) }
                     .padding(vertical = 12.dp, horizontal = 16.dp),
                 contentAlignment = Alignment.Center
@@ -1422,8 +1422,8 @@ private fun SettingsSection(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(SurfaceCard, RoundedCornerShape(18.dp))
-                .border(1.dp, CardBorderDark, RoundedCornerShape(18.dp))
+                .background(SurfaceCard, RoundedCornerShape(24.dp))
+                .border(1.dp, CardBorderDark, RoundedCornerShape(24.dp))
                 .clickable { expanded = !expanded }
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -1521,8 +1521,8 @@ private fun SettingsCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(SurfaceCard, RoundedCornerShape(18.dp))
-            .border(1.dp, CardBorderDark, RoundedCornerShape(18.dp))
+            .background(SurfaceCard, RoundedCornerShape(24.dp))
+            .border(1.dp, CardBorderDark, RoundedCornerShape(24.dp))
             .padding(20.dp)
     ) {
         content()

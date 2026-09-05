@@ -110,8 +110,8 @@ fun SetupWizardDialog(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(AccentPink.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
-                            .border(1.dp, AccentPink.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                            .background(AccentPink.copy(alpha = 0.15f), RoundedCornerShape(18.dp))
+                            .border(1.dp, AccentPink.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
                             .padding(12.dp)
                     ) {
                         Text(
@@ -127,7 +127,7 @@ fun SetupWizardDialog(
 
                     Button(
                         onClick = onRetry,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = CircleShape,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = PrimaryIndigo,
                             contentColor = Color.White
@@ -148,7 +148,7 @@ fun SetupWizardDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(8.dp)
-                                .clip(RoundedCornerShape(4.dp)),
+                                .clip(CircleShape),
                             color = AccentCyan,
                             trackColor = SurfaceVariantDark,
                             strokeCap = StrokeCap.Round

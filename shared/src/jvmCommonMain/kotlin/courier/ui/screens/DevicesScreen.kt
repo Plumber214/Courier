@@ -144,7 +144,8 @@ fun DevicesScreen(
         modifier = Modifier
             .widthIn(max = CONTENT_MAX_WIDTH_DP.dp)
             .fillMaxWidth()
-            .padding(horizontal = gutter, vertical = 20.dp)
+            .padding(horizontal = gutter)
+            .padding(top = 8.dp, bottom = 20.dp)
     ) {
         // Clipboard Status Banner (Stage 4), now the shared component that the
         // Downloads tab uses to confirm a send to a paired device.
@@ -196,8 +197,8 @@ fun DevicesScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(SurfaceDark, RoundedCornerShape(16.dp))
-                .border(1.dp, CardBorderDark, RoundedCornerShape(16.dp))
+                .background(SurfaceDark, RoundedCornerShape(24.dp))
+                .border(1.dp, CardBorderDark, RoundedCornerShape(24.dp))
                 .padding(16.dp)
         ) {
             Row(
@@ -244,7 +245,7 @@ fun DevicesScreen(
                 IconButton(
                     onClick = { viewModel.openRenameDialog() },
                     modifier = Modifier
-                        .background(SurfaceVariantDark.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                        .background(SurfaceVariantDark.copy(alpha = 0.6f), CircleShape)
                         .size(36.dp)
                 ) {
                     Icon(
@@ -263,8 +264,8 @@ fun DevicesScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(SurfaceVariantDark.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                .border(1.dp, CardBorderDark, RoundedCornerShape(12.dp))
+                .background(SurfaceVariantDark.copy(alpha = 0.4f), RoundedCornerShape(18.dp))
+                .border(1.dp, CardBorderDark, RoundedCornerShape(18.dp))
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -307,8 +308,8 @@ fun DevicesScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(SurfaceCard, RoundedCornerShape(14.dp))
-                    .border(1.dp, CardBorderDark, RoundedCornerShape(14.dp))
+                    .background(SurfaceCard, RoundedCornerShape(24.dp))
+                    .border(1.dp, CardBorderDark, RoundedCornerShape(24.dp))
                     .padding(20.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -377,8 +378,8 @@ fun DevicesScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(SurfaceCard, RoundedCornerShape(14.dp))
-                    .border(1.dp, CardBorderDark, RoundedCornerShape(14.dp))
+                    .background(SurfaceCard, RoundedCornerShape(24.dp))
+                    .border(1.dp, CardBorderDark, RoundedCornerShape(24.dp))
                     .padding(18.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -590,8 +591,8 @@ fun PairedDeviceCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(SurfaceCard, RoundedCornerShape(14.dp))
-            .border(1.dp, CardBorderDark, RoundedCornerShape(14.dp))
+            .background(SurfaceCard, RoundedCornerShape(24.dp))
+            .border(1.dp, CardBorderDark, RoundedCornerShape(24.dp))
             .padding(16.dp)
     ) {
         Column {
@@ -679,8 +680,8 @@ fun PairedDeviceCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(SurfaceDark.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    .background(SurfaceDark.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -705,11 +706,11 @@ fun PairedDeviceCard(
 
                 Button(
                     onClick = onSendClipboard,
-                    shape = RoundedCornerShape(8.dp),
+                    shape = CircleShape,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = PrimaryIndigo
                     ),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 4.dp),
                     modifier = Modifier.height(32.dp)
                 ) {
                     Text("Send", fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -727,8 +728,8 @@ fun DiscoveredDeviceCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(SurfaceCard, RoundedCornerShape(14.dp))
-            .border(1.dp, CardBorderDark, RoundedCornerShape(14.dp))
+            .background(SurfaceCard, RoundedCornerShape(24.dp))
+            .border(1.dp, CardBorderDark, RoundedCornerShape(24.dp))
             .padding(14.dp)
     ) {
         Row(
@@ -788,7 +789,7 @@ fun DiscoveredDeviceCard(
 
             Button(
                 onClick = onPairClick,
-                shape = RoundedCornerShape(10.dp),
+                shape = CircleShape,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = PrimaryIndigo,
                     contentColor = Color.White
@@ -835,8 +836,8 @@ fun PairingVerificationDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(PrimaryContainer, RoundedCornerShape(12.dp))
-                        .border(1.dp, AccentCyan, RoundedCornerShape(12.dp))
+                        .background(PrimaryContainer, RoundedCornerShape(20.dp))
+                        .border(1.dp, AccentCyan, RoundedCornerShape(20.dp))
                         .padding(vertical = 14.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -879,6 +880,7 @@ fun PairingVerificationDialog(
             if (onConfirm != null) {
                 Button(
                     onClick = onConfirm,
+                    shape = CircleShape,
                     colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen)
                 ) {
                     Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)

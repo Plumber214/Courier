@@ -1,0 +1,164 @@
+name: Build & Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Publish as GitHub Release'
+        type: boolean
+        default: true
+      draft:
+        description: 'Create draft release'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows Desktop
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Read version from gradle.properties
+        id: version
+        shell: pwsh
+        run: |
+          $ver = (Get-Content gradle.properties | Select-String "courier.versionName=(.*)").Matches.Groups[1].Value.Trim()
+          Write-Output "version=$ver" >> $env:GITHUB_OUTPUT
+          Write-Output "Detected version: $ver"
+
+      - name: Verify version consistency
+        run: ./gradlew checkVersionConsistency --no-daemon
+
+      - name: Build and publish desktop release
+        run: ./gradlew :desktopApp:publishDesktopRelease --no-daemon
+
+      - name: Package portable Windows zip
+        shell: pwsh
+        run: |
+          $ver = "${{ steps.version.outputs.version }}"
+          Compress-Archive -Path release/Courier-Windows -DestinationPath "release/Courier-Windows-v$ver.zip" -Force
+          Copy-Item "release/Courier-Windows-v$ver.zip" "release/Courier-Windows-latest.zip" -Force
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifacts
+          path: |
+            release/Courier-Desktop-v*.jar
+            release/Courier-Desktop-latest.jar
+            release/Courier-Windows-v*.zip
+            release/Courier-Windows-latest.zip
+          retention-days: 7
+
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Read version from gradle.properties
+        id: version
+        run: |
+          VERSION=$(grep 'courier.versionName=' gradle.properties | cut -d'=' -f2 | tr -d '[:space:]')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Detected version: $VERSION"
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Build and publish Android release
+        run: ./gradlew :androidApp:publishAndroidRelease --no-daemon
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-artifacts
+          path: |
+            release/Courier-Android-v*.apk
+            release/Courier-Android-latest.apk
+          retention-days: 7
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [build-windows, build-android]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true)
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create release directory
+        run: mkdir -p dist
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-artifacts
+          path: dist
+
+      - name: Download Android artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: android-artifacts
+          path: dist
+
+      - name: Determine Release Tag & Name
+        id: release_info
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG="${{ github.ref_name }}"
+            NAME="Courier $TAG"
+          else
+            TAG="v${{ needs.build-windows.outputs.version }}"
+            NAME="Courier $TAG"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_info.outputs.tag }}
+          name: ${{ steps.release_info.outputs.name }}
+          draft: ${{ github.event.inputs.draft || false }}
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            dist/Courier-Android-v*.apk
+            dist/Courier-Android-latest.apk
+            dist/Courier-Desktop-v*.jar
+            dist/Courier-Desktop-latest.jar
+            dist/Courier-Windows-v*.zip
+            dist/Courier-Windows-latest.zip
